@@ -3,26 +3,26 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>정비 지원</title>
-<meta name="description" content="정비보조 더티 지원 · 담당 메이드와 더티 객실 체크">
+<title>정비 레포트</title>
+<meta name="description" content="룸메이드 전자식 정비 레포트 · 오늘 객실 확인과 자가인스펙션 완료 체크">
 <!-- 카톡·문자로 링크를 보낼 때 나오는 미리보기 카드 -->
 <meta property="og:type" content="website">
-<meta property="og:title" content="정비 지원">
-<meta property="og:description" content="정비보조 더티 지원 · 담당 메이드와 더티 객실 체크">
-<meta property="og:image" content="https://haeundae-rm.github.io/dirty/og.png">
+<meta property="og:title" content="정비 레포트">
+<meta property="og:description" content="룸메이드 전자식 정비 레포트 · 오늘 객실 확인과 자가인스펙션 완료 체크">
+<meta property="og:image" content="https://haeundae-rm.github.io/rm/og.png">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
-<meta property="og:url" content="https://haeundae-rm.github.io/dirty/">
+<meta property="og:url" content="https://haeundae-rm.github.io/rm/">
 <link rel="manifest" href="manifest.json">
 <link rel="icon" type="image/png" href="icon-192.png">
 <link rel="apple-touch-icon" href="icon-180.png">
-<meta name="theme-color" content="#9A4708">
+<meta name="theme-color" content="#10233F">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="apple-mobile-web-app-title" content="정비 지원">
+<meta name="apple-mobile-web-app-title" content="정비 레포트">
 <style>
-  html, body { margin: 0; height: 100%; background: #9A4708; overflow: hidden; }
+  html, body { margin: 0; height: 100%; background: #10233F; overflow: hidden; }
   #app { position: fixed; inset: 0; width: 100%; height: 100%; border: 0; background: #F3F5F8; }
   #wait { position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px;
           color: #fff; font: 700 17px "Noto Sans KR", "Malgun Gothic", sans-serif; }
@@ -31,11 +31,11 @@
 </style>
 </head>
 <body>
-<div id="wait"><img src="icon-192.png" alt=""><span>정비 지원을 여는 중…</span><a id="direct">열리지 않으면 여기를 눌러 주세요</a></div>
-<iframe id="app" title="정비 지원" allow="vibrate"></iframe>
+<div id="wait"><img src="icon-192.png" alt=""><span>정비 레포트를 여는 중…</span><a id="direct">열리지 않으면 여기를 눌러 주세요</a></div>
+<iframe id="app" title="정비 레포트" allow="vibrate"></iframe>
 <script>
   // ▼▼▼ 앱 주소 (Apps Script 웹앱 /exec 주소). 바뀌면 이 한 줄만 고치면 됨 ▼▼▼
-  var APP_URL = 'https://script.google.com/macros/s/AKfycbyPvhvScAcDfGqyxdK9pvr8vtewfjAkHsbRBiN04GCNbzE4HL_zZHODWPPb4xUHQb0LCw/exec';
+  var APP_URL = 'https://script.google.com/macros/s/AKfycbzZt79EW2oUCbcfayJ-TDzV8Bb3uxo67VzbFqC0ACy-Savl-LhrrDEvsdCR4vvKTvFF/exec';
   // ▲▲▲
 
   var frame = document.getElementById('app'), direct = document.getElementById('direct');
