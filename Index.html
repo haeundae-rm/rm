@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>정비 레포트</title>
+<meta name="description" content="룸메이드 전자식 정비 레포트 · 오늘 객실 확인과 자가인스펙션 완료 체크">
+<!-- 카톡·문자로 링크를 보낼 때 나오는 미리보기 카드 -->
+<meta property="og:type" content="website">
+<meta property="og:title" content="정비 레포트">
+<meta property="og:description" content="룸메이드 전자식 정비 레포트 · 오늘 객실 확인과 자가인스펙션 완료 체크">
+<meta property="og:image" content="https://haeundae-rm.github.io/rm/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:url" content="https://haeundae-rm.github.io/rm/">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" type="image/png" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-180.png">
+<meta name="theme-color" content="#10233F">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="정비 레포트">
+<style>
+  html, body { margin: 0; height: 100%; background: #10233F; overflow: hidden; }
+  #app { position: fixed; inset: 0; width: 100%; height: 100%; border: 0; background: #F3F5F8; }
+  #wait { position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px;
+          color: #fff; font: 700 17px "Noto Sans KR", "Malgun Gothic", sans-serif; }
+  #wait img { width: 96px; height: 96px; border-radius: 22px; }
+  #wait a { color: #C9D6EC; font-size: 14px; font-weight: 500; display: none; }
+</style>
+</head>
+<body>
+<div id="wait"><img src="icon-192.png" alt=""><span>정비 레포트를 여는 중…</span><a id="direct">열리지 않으면 여기를 눌러 주세요</a></div>
+<iframe id="app" title="정비 레포트" allow="vibrate"></iframe>
+<script>
+  // ▼▼▼ 앱 주소 (Apps Script 웹앱 /exec 주소). 바뀌면 이 한 줄만 고치면 됨 ▼▼▼
+  var APP_URL = 'https://script.google.com/macros/s/AKfycbzZt79EW2oUCbcfayJ-TDzV8Bb3uxo67VzbFqC0ACy-Savl-LhrrDEvsdCR4vvKTvFF/exec';
+  // ▲▲▲
+
+  var frame = document.getElementById('app'), direct = document.getElementById('direct');
+  direct.href = APP_URL;
+  frame.src = APP_URL;
+  setTimeout(function(){ direct.style.display = 'block'; }, 12000);
+
+  // 휴대폰 뒤로가기: 앱이 꺼지지 않게 '뒤로 갈 자리'를 하나 깔아 두고, 누르면 앱 안(열린 창 닫기 등)에서 처리
+  var armed = false;
+  function arm(){ if (!armed) { history.pushState({ rm: 1 }, ''); armed = true; } }
+  function broadcast(msg, w){   // 앱은 구글 화면 안쪽 깊은 곳에 있어서 안쪽 화면 전부에 알림
+    try { for (var i = 0; i < w.frames.length; i++) { var f = w.frames[i]; f.postMessage(msg, '*'); broadcast(msg, f); } } catch (e) {}
+  }
+  window.addEventListener('popstate', function(){ armed = false; arm(); broadcast({ rm: 'back' }, window); });
+  window.addEventListener('message', function(e){
+    var d = e.data || {};
+    if (d.rm === 'tap') arm();                                                    // 화면을 누를 때마다 뒤로가기 자리 확보
+    if (d.rm === 'vibrate') { try { navigator.vibrate(d.ms || 35); } catch (x) {} }  // 완료 진동 (안쪽에서는 진동이 막혀 있어 여기서 울림)
+  });
+
+  if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(function(){});
+</script>
+</body>
+</html>
