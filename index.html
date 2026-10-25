@@ -54,7 +54,14 @@
     var d = e.data || {};
     if (d.rm === 'tap') arm();                                                    // 화면을 누를 때마다 뒤로가기 자리 확보
     if (d.rm === 'vibrate') { try { navigator.vibrate(d.ms || 35); } catch (x) {} }  // 완료 진동 (안쪽에서는 진동이 막혀 있어 여기서 울림)
+    if (d.rm === 'hello') broadcast(mode(), window);                              // 앱이 물어보면: 설치한 앱으로 열었는지 알려 줌 (설치 안내 띠용)
   });
+  function mode(){
+    var sa = false;
+    try { sa = navigator.standalone === true || ['standalone', 'fullscreen', 'minimal-ui'].some(function(m){ return matchMedia('(display-mode: ' + m + ')').matches; }); } catch (x) {}
+    return { rm: 'mode', standalone: sa, kakao: /KAKAOTALK/i.test(navigator.userAgent) };
+  }
+  frame.addEventListener('load', function(){ setTimeout(function(){ broadcast(mode(), window); }, 1500); });
 
   if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(function(){});
 </script>
