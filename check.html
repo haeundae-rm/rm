@@ -1,0 +1,137 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>보안 규칙 점검</title>
+<style>
+  :root{--bg:#F3F5F8;--card:#fff;--ink:#16202C;--muted:#5E6B7A;--line:#D9DFE7;--ok:#2E7D4F;--bad:#C62828;--navy:#10233F}
+  @media (prefers-color-scheme:dark){:root{--bg:#0E141C;--card:#17202B;--ink:#E8EDF3;--muted:#9AA7B6;--line:#2A3644;--ok:#5CC28A;--bad:#FF6B6B}}
+  *{box-sizing:border-box} body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.5 "Noto Sans KR","Malgun Gothic",sans-serif}
+  header{background:var(--navy);color:#fff;padding:16px} header h1{margin:0;font-size:19px}
+  main{max-width:720px;margin:0 auto;padding:16px;display:flex;flex-direction:column;gap:12px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px}
+  label{display:block;font-weight:700;margin-top:8px} input{width:100%;min-height:48px;font-size:17px;padding:0 12px;border-radius:10px;border:1.5px solid var(--line);background:var(--bg);color:var(--ink)}
+  button{min-height:54px;width:100%;margin-top:14px;border:0;border-radius:12px;background:var(--navy);color:#fff;font:800 18px inherit;cursor:pointer}
+  button:disabled{opacity:.5}
+  .sum{font-size:20px;font-weight:900} .sum.ok{color:var(--ok)} .sum.bad{color:var(--bad)}
+  table{width:100%;border-collapse:collapse;font-size:14px} td{padding:7px 4px;border-top:1px solid var(--line);vertical-align:top}
+  td:last-child{white-space:nowrap;text-align:right;font-weight:800} .ok{color:var(--ok)} .bad{color:var(--bad)} small{color:var(--muted)}
+</style>
+</head>
+<body>
+<header><h1>🔒 정비 레포트 · 보안 규칙 점검</h1></header>
+<main>
+  <div class="card">
+    <p style="margin:0">Firebase 콘솔에 규칙을 <b>게시한 뒤</b> 여기서 점검합니다. 관리자 계정으로 시험용 날짜(2099-12-31)를 잠깐 만들고, 메이드처럼 들어가 <b>되는 것·막혀야 하는 것</b>을 하나씩 눌러 본 다음 시험 자료를 지웁니다. 실제 배정·기록은 건드리지 않아요.</p>
+    <label>관리자 이메일 <input id="em" type="email" autocomplete="username"></label>
+    <label>관리자 비밀번호 <input id="pw" type="password" autocomplete="current-password"></label>
+    <button id="go">점검 시작</button>
+  </div>
+  <div class="card" id="out" hidden><div class="sum" id="sum">점검 중…</div><table id="tb"></table></div>
+</main>
+<script type="module">
+import { initializeApp } from 'https://www.gstatic.com/firebasejs/12.19.0/firebase-app.js';
+import { getAuth, signInWithEmailAndPassword, signInAnonymously, signOut } from 'https://www.gstatic.com/firebasejs/12.19.0/firebase-auth.js';
+import { getFirestore, doc, collection, getDoc, getDocs, setDoc, addDoc, updateDoc, deleteDoc, query, where, serverTimestamp, Timestamp } from 'https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore.js';
+
+const app = initializeApp({
+  apiKey: 'AIzaSyCyESLB9lGONuwXQUWBz6hPw09u9Zq9yFQ', authDomain: 'haeundae-rm.firebaseapp.com', projectId: 'haeundae-rm',
+  storageBucket: 'haeundae-rm.firebasestorage.app', messagingSenderId: '468580994597', appId: '1:468580994597:web:b2c841463ec39b577679cc'
+}, 'rulecheck');
+const auth = getAuth(app), db = getFirestore(app);
+const T = '2099-12-31', A = '점검A', B = '점검B';
+const $ = s => document.querySelector(s);
+const rows = []; let fail = 0;
+function show(){ $('#tb').innerHTML = rows.map(r => '<tr><td>' + r[0] + (r[2] ? '<br><small>' + r[2] + '</small>' : '') + '</td><td class="' + (r[1] ? 'ok' : 'bad') + '">' + (r[1] ? '✅ 예상대로' : '❌ 다름') + '</td></tr>').join(''); }
+// expect: true = 되어야 함, false = 막혀야 함
+async function t(name, expect, fn){
+  let ok = true, why = '';
+  try { await fn(); } catch (e) { ok = false; why = e.code || e.message; }
+  const pass = ok === expect;
+  if (!pass) fail++;
+  rows.push([(expect ? '되어야 함 · ' : '막혀야 함 · ') + name, pass, pass ? '' : (ok ? '막히지 않았어요' : '오류: ' + why)]);
+  show();
+}
+const D = (...p) => doc(db, ...p);
+const rec = (room, maid, extra) => Object.assign({ room, maid, status: '완료', issues: [], memo: '', at: serverTimestamp(), clientAt: Timestamp.now(), uid: auth.currentUser.uid, proxy: false }, extra || {});
+const chg = (maid, extra) => Object.assign({ kind: '추가', maid, room: '403', by: '본인', at: serverTimestamp(), clientAt: Timestamp.now(), uid: auth.currentUser.uid, parties: [maid] }, extra || {});
+
+async function cleanup(anonUid){
+  const sub = ['recs', 'changes', 'acks', 'plans', 'owners'];
+  for (const s of sub) { const q = await getDocs(collection(db, 'days', T, s)); for (const d of q.docs) await deleteDoc(d.ref); }
+  await deleteDoc(D('days', T));
+  await deleteDoc(D('notices', 'zz_check'));
+  if (anonUid) await deleteDoc(D('devices', anonUid));
+}
+
+$('#go').onclick = async () => {
+  const em = $('#em').value.trim(), pw = $('#pw').value;
+  if (!em || !pw) { alert('관리자 이메일과 비밀번호를 넣어 주세요.'); return; }
+  $('#go').disabled = true; $('#out').hidden = false; rows.length = 0; fail = 0; show();
+  let anonUid = '';
+  try {
+    // 1) 관리자: 시험 자료 만들기
+    await signInWithEmailAndPassword(auth, em, pw);
+    await t('관리자 · 시험 날짜 만들기', true, () => setDoc(D('days', T), { label: '시험', maids: [A, B] }));
+    await t('관리자 · 배정 넣기', true, async () => {
+      await setDoc(D('days', T, 'plans', A), { rooms: [{ room: '401' }] });
+      await setDoc(D('days', T, 'plans', B), { rooms: [{ room: '402' }] });
+      await setDoc(D('days', T, 'owners', '402'), { maids: [B] });
+    });
+    await t('관리자 · 공지 쓰기', true, () => setDoc(D('notices', 'zz_check'), { title: '규칙 점검' }));
+    await signOut(auth);
+
+    // 2) 메이드처럼 (익명 로그인)
+    await signInAnonymously(auth); anonUid = auth.currentUser.uid;
+    await t('이름 목록 보기', true, () => getDoc(D('days', T)));
+    await t('등록 전에 배정 보기', false, () => getDoc(D('days', T, 'plans', A)));
+    await t('명단에 없는 이름으로 등록', false, () => setDoc(D('devices', anonUid), { name: '가짜', date: T, at: serverTimestamp() }));
+    await t('본인 이름으로 등록', true, () => setDoc(D('devices', anonUid), { name: A, date: T, at: serverTimestamp() }));
+    await t('등록 이름 스스로 바꾸기', false, () => updateDoc(D('devices', anonUid), { name: B }));
+    await t('내 배정 보기', true, () => getDoc(D('days', T, 'plans', A)));
+    await t('다른 메이드 배정 보기', false, () => getDoc(D('days', T, 'plans', B)));
+    await t('전체 배정 목록 보기', false, () => getDocs(collection(db, 'days', T, 'plans')));
+    await t('교환할 객실 담당자 확인', true, () => getDoc(D('days', T, 'owners', '402')));
+    await t('객실 담당자 전체 목록', false, () => getDocs(collection(db, 'days', T, 'owners')));
+    await t('내 객실 완료 저장', true, () => setDoc(D('days', T, 'recs', '401_' + A), rec('401', A)));
+    await t('내 객실 다시 저장(메모 수정)', true, () => setDoc(D('days', T, 'recs', '401_' + A), rec('401', A, { memo: '메모' })));
+    await t('남의 이름으로 완료 저장', false, () => setDoc(D('days', T, 'recs', '402_' + B), rec('402', B)));
+    await t('메이드가 관리자 대신 표시', false, () => setDoc(D('days', T, 'recs', '401_' + A), rec('401', A, { proxy: true })));
+    await t('문서 이름과 객실이 다름', false, () => setDoc(D('days', T, 'recs', '999_' + A), rec('401', A)));
+    await t('메이드가 완료 시각 조작', false, () => setDoc(D('days', T, 'recs', '401_' + A), rec('401', A, { at: Timestamp.fromDate(new Date(2020, 0, 1)) })));
+    await t('내 기록 보기', true, () => getDocs(query(collection(db, 'days', T, 'recs'), where('maid', '==', A))));
+    await t('전체 기록 보기', false, () => getDocs(collection(db, 'days', T, 'recs')));
+    await t('기록 지우기', false, () => deleteDoc(D('days', T, 'recs', '401_' + A)));
+    await t('객실 추가 기록', true, () => addDoc(collection(db, 'days', T, 'changes'), chg(A)));
+    await t('교환 기록', true, () => addDoc(collection(db, 'days', T, 'changes'), chg(A, { kind: '교환', room: '401', to: B, toRoom: '402', parties: [A, B] })));
+    await t('남의 이름으로 추가 기록', false, () => addDoc(collection(db, 'days', T, 'changes'), chg(B)));
+    await t('나와 관련된 변경 보기', true, () => getDocs(query(collection(db, 'days', T, 'changes'), where('parties', 'array-contains', A))));
+    await t('전체 변경 보기', false, () => getDocs(collection(db, 'days', T, 'changes')));
+    await t('공지 확인 저장', true, () => setDoc(D('days', T, 'acks', 'zz_check_' + A), { notice: 'zz_check', maid: A, at: serverTimestamp() }));
+    await t('공지 읽기', true, () => getDoc(D('notices', 'zz_check')));
+    await t('공지 쓰기', false, () => setDoc(D('notices', 'zz_check'), { title: '해킹' }));
+    await t('휴대폰 등록 목록 보기', false, () => getDocs(collection(db, 'devices')));
+    await t('날짜·명단 고치기', false, () => setDoc(D('days', T), { label: 'x', maids: [] }));
+    await t('규칙에 없는 곳에 쓰기', false, () => setDoc(D('etc', 'x'), { a: 1 }));
+    try { await auth.currentUser.delete(); } catch (e) {}
+    await signOut(auth);
+
+    // 3) 관리자: 전체 보기 + 시험 자료 지우기
+    await signInWithEmailAndPassword(auth, em, pw);
+    await t('관리자 · 전체 기록 보기', true, () => getDocs(collection(db, 'days', T, 'recs')));
+    await t('관리자 · 대신 완료', true, () => setDoc(D('days', T, 'recs', '402_' + B), rec('402', B, { proxy: true })));
+    await t('관리자 · 휴대폰 등록 목록', true, () => getDocs(collection(db, 'devices')));
+    await t('관리자 · 시험 자료 지우기', true, () => cleanup(anonUid));
+    await signOut(auth);
+  } catch (e) {
+    fail++; rows.push(['진행 중 멈춤', false, (e.code || e.message) + (String(e.code).indexOf('auth/') === 0 ? ' — 이메일·비밀번호 또는 로그인 방법(익명) 설정 확인' : '')]); show();
+  }
+  $('#sum').className = 'sum ' + (fail ? 'bad' : 'ok');
+  $('#sum').textContent = fail ? '❌ ' + fail + '개가 예상과 달라요 — 이 화면을 캡처해서 보내 주세요' : '✅ ' + rows.length + '개 모두 예상대로예요';
+  $('#go').disabled = false; $('#pw').value = '';
+};
+</script>
+</body>
+</html>
