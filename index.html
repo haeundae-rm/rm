@@ -21,49 +21,23 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="정비 레포트">
-<style>
-  html, body { margin: 0; height: 100%; background: #10233F; overflow: hidden; }
-  #app { position: fixed; inset: 0; width: 100%; height: 100%; border: 0; background: #F3F5F8; }
-  #wait { position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px;
-          color: #fff; font: 700 17px "Noto Sans KR", "Malgun Gothic", sans-serif; }
-  #wait img { width: 96px; height: 96px; border-radius: 22px; }
-  #wait a { color: #C9D6EC; font-size: 14px; font-weight: 500; display: none; }
-</style>
+<link rel="preconnect" href="https://firestore.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;900&family=IBM+Plex+Mono:wght@500;600&display=swap">
+<!-- 2026-11 Firebase 새 앱으로 전환. 화면 파일은 app/ 폴더 하나 (rm/app/ 시범 주소와 같은 파일). 예전 시작 페이지 = old.html -->
+<link rel="stylesheet" href="app/style.css?v=2026.11.05-3">
 </head>
 <body>
-<div id="wait"><img src="icon-192.png" alt=""><span>정비 레포트를 여는 중…</span><a id="direct">열리지 않으면 여기를 눌러 주세요</a></div>
-<iframe id="app" title="정비 레포트" allow="vibrate"></iframe>
+<header class="top">
+  <div class="top-row"><h1>룸메이드 정비 레포트</h1><span class="date" id="date">불러오는 중</span></div>
+  <div id="bar"></div>
+  <div class="sync" id="sync"></div>
+</header>
+<main id="main"><div class="notice"><strong>오늘 배정을 불러오고 있어요.</strong></div></main>
+<div id="sheet"></div>
+<noscript><div class="notice">이 앱은 자바스크립트가 켜져 있어야 해요.</div></noscript>
+<script type="module" src="app/app.js?v=2026.11.05-3"></script>
 <script>
-  // ▼▼▼ 앱 주소 (Apps Script 웹앱 /exec 주소). 바뀌면 이 한 줄만 고치면 됨 ▼▼▼
-  var APP_URL = 'https://script.google.com/macros/s/AKfycbzZt79EW2oUCbcfayJ-TDzV8Bb3uxo67VzbFqC0ACy-Savl-LhrrDEvsdCR4vvKTvFF/exec';
-  // ▲▲▲
-
-  var frame = document.getElementById('app'), direct = document.getElementById('direct');
-  direct.href = APP_URL;
-  frame.src = APP_URL;
-  setTimeout(function(){ direct.style.display = 'block'; }, 12000);
-
-  // 휴대폰 뒤로가기: 앱이 꺼지지 않게 '뒤로 갈 자리'를 하나 깔아 두고, 누르면 앱 안(열린 창 닫기 등)에서 처리
-  var armed = false;
-  function arm(){ if (!armed) { history.pushState({ rm: 1 }, ''); armed = true; } }
-  function broadcast(msg, w){   // 앱은 구글 화면 안쪽 깊은 곳에 있어서 안쪽 화면 전부에 알림
-    try { for (var i = 0; i < w.frames.length; i++) { var f = w.frames[i]; f.postMessage(msg, '*'); broadcast(msg, f); } } catch (e) {}
-  }
-  window.addEventListener('popstate', function(){ armed = false; arm(); broadcast({ rm: 'back' }, window); });
-  window.addEventListener('message', function(e){
-    var d = e.data || {};
-    if (d.rm === 'tap') arm();                                                    // 화면을 누를 때마다 뒤로가기 자리 확보
-    if (d.rm === 'vibrate') { try { navigator.vibrate(d.ms || 35); } catch (x) {} }  // 완료 진동 (안쪽에서는 진동이 막혀 있어 여기서 울림)
-    if (d.rm === 'hello') broadcast(mode(), window);                              // 앱이 물어보면: 설치한 앱으로 열었는지 알려 줌 (설치 안내 띠용)
-  });
-  function mode(){
-    var sa = false;
-    try { sa = navigator.standalone === true || ['standalone', 'fullscreen', 'minimal-ui'].some(function(m){ return matchMedia('(display-mode: ' + m + ')').matches; }); } catch (x) {}
-    return { rm: 'mode', standalone: sa, kakao: /KAKAOTALK/i.test(navigator.userAgent) };
-  }
-  frame.addEventListener('load', function(){ setTimeout(function(){ broadcast(mode(), window); }, 1500); });
-
-  if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(function(){});
+  setTimeout(function(){ var m = document.getElementById('main'); if (m && /불러오고 있어요/.test(m.textContent) && !window.__rm) m.innerHTML = '<div class="notice"><strong>앱을 여는 데 오래 걸려요.</strong><br>인터넷 연결을 확인하고 앱을 닫았다가 다시 열어 주세요.</div>'; }, 15000);
 </script>
 </body>
 </html>
