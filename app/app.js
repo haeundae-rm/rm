@@ -3,7 +3,7 @@
 import * as S from './store.js';
 import { setupMyWork } from './mywork.js';
 
-const APP_VER = '2026.11.05-3';
+const APP_VER = '2026.11.05-4';
 // 관리자 = 보안 규칙 isAdmin 과 같은 목록 (UID 는 공개돼도 되는 값)
 const ADMINS = [
   { uid: 'iw2orXgIgPgTbLUQa0b41XJ9Dvd2', label: '소장', email: 'unieshaeundae+admin@gmail.com' },
@@ -291,6 +291,7 @@ function pendLong() { const n = pendingCount(); if (!n) { pendSince = 0; return 
 function render() {
   drawSync();
   if (!user || (!isAdm && devState === 'wait') || dayDoc === undefined) { $('#main').innerHTML = '<div class="notice"><strong>오늘 배정을 불러오고 있어요.</strong></div>'; return; }
+  if (!data) compute();   // 화면이 꺼져 있으면 휴대폰이 그리기 예약(requestAnimationFrame)을 미뤄서, 30초 시계가 계산보다 먼저 올 수 있음 (11/5 오류 기록)
   $('#date').textContent = data.label;
   const y = window.scrollY;
   if (isAdm) {
