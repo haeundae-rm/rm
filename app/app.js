@@ -1,8 +1,9 @@
 // 정비 레포트 새 앱 (Firebase) — 화면·동작은 지금 앱(Apps Script Index.html + 효과음)과 같게, 저장만 Firestore
 // 2026-10-31 Firebase 이전 4단계. 데이터 읽기·쓰기는 store.js 한 곳
 import * as S from './store.js';
+import { setupMyWork } from './mywork.js';
 
-const APP_VER = '2026.10.31-1';
+const APP_VER = '2026.11.05-1';
 // 관리자 = 보안 규칙 isAdmin 과 같은 목록 (UID 는 공개돼도 되는 값)
 const ADMINS = [
   { uid: 'iw2orXgIgPgTbLUQa0b41XJ9Dvd2', label: '소장', email: 'unieshaeundae+admin@gmail.com' },
@@ -31,7 +32,7 @@ const VENT_FROM = '12:00', VENT_TO = '13:30';
 let user = null, isAdm = false, me = null, devState = 'wait';   // devState: wait / none / ok
 let today = seoulDate(), dayDoc = undefined, dayCache = false, cacheSince = 0;
 let myPlan = null, plans = {}, chgDocs = [], recDocs = [], ackDocs = [], notices = [], devices = [], relay = null;
-let roomInfo = {}, infoAsked = {}, pastAcks = {};
+let roomInfo = {}, infoAsked = {}, pastAcks = {}, dirtyDoc = null, acksReady = false, errDocs = [];
 let data = null, recs = {}, pend = {}, dlg = null, busy = false, viewMaid = null;
 let subs = [], meSubs = [], newVer = '';
 const W = room => (ROYAL[room] ? 2 : 1);
@@ -91,6 +92,7 @@ function start() {
     update();
   }, e => console.warn('날짜 읽기 실패', e)));
   subs.push(S.listenQuery('notices', [], docs => { notices = docs.map(x => x.data); update(); }, e => console.warn('공지 읽기 실패', e)));
+  subs.push(S.listenDoc('meta/dirty', d => { dirtyDoc = d; update(); }, () => {}));   // 정비 지원 '더티 완료' 객실 (중계가 올림)
   if (isAdm) {
     subs.push(S.listenQuery(D + '/plans', [], docs => { plans = {}; docs.forEach(x => { plans[x.id] = x.data.rooms || []; }); update(); }));
     subs.push(S.listenQuery(D + '/changes', [], docs => { chgDocs = docs; update(); }));
@@ -98,12 +100,13 @@ function start() {
     subs.push(S.listenQuery(D + '/acks', [], docs => { ackDocs = docs; update(); }));
     subs.push(S.listenQuery('devices', [], docs => { devices = docs.map(x => Object.assign({ uid: x.id }, x.data)); update(); }));
     subs.push(S.listenDoc('meta/relay', d => { relay = d; update(); }));
+    subs.push(S.listenQuery('errors', [['day', '==', today]], docs => { errDocs = docs.map(x => x.data).sort((a, b) => (b.at || 0) - (a.at || 0)); update(); }, () => {}));
     loadPastAcksAdmin();
   } else {
     subs.push(S.listenDoc('devices/' + user.uid, (d, meta) => {
       if (meta.pending) return;   // 서버가 등록을 받은 뒤에 본인 자료를 읽음 (먼저 읽으면 규칙에 막힘)
       const name = d && d.name || null;
-      if (name !== me || devState === 'wait') { me = name; devState = name ? 'ok' : 'none'; listenMine(); }
+      if (name !== me || devState === 'wait') { me = name; devState = name ? 'ok' : 'none'; MW.reset(); listenMine(); }
       update();
       if (me) resendFailed();
     }, e => { console.warn('등록 확인 실패', e); devState = 'none'; update(); }));
@@ -113,14 +116,14 @@ function start() {
 // 메이드 본인 것만 (규칙상 반드시 이름 조건을 붙여야 읽힘)
 function listenMine() {
   meSubs.forEach(f => { try { f(); } catch (e) {} }); meSubs = [];
-  myPlan = null; chgDocs = []; recDocs = []; ackDocs = []; roomInfo = {}; infoAsked = {};
+  myPlan = null; chgDocs = []; recDocs = []; ackDocs = []; roomInfo = {}; infoAsked = {}; acksReady = false;
   if (!me) return;
   const D = 'days/' + today, nm = me;
-  const lost = e => { console.warn('읽기 거절 (등록 해제?)', e); };
+  const lost = e => { console.warn('읽기 거절 (등록 해제?)', e); report('읽기', (e && e.code || '') + ' ' + (e && e.message || e)); };
   meSubs.push(S.listenDoc(D + '/plans/' + nm, d => { myPlan = d ? d.rooms || [] : null; update(); }, lost));
   meSubs.push(S.listenQuery(D + '/recs', [['maid', '==', nm]], docs => { recDocs = docs; update(); }, lost));
   meSubs.push(S.listenQuery(D + '/changes', [['parties', 'array-contains', nm]], docs => { chgDocs = docs; update(); }, lost));
-  meSubs.push(S.listenQuery(D + '/acks', [['maid', '==', nm]], docs => { ackDocs = docs; update(); }, lost));
+  meSubs.push(S.listenQuery(D + '/acks', [['maid', '==', nm]], (docs, meta) => { ackDocs = docs; if (!meta.fromCache) acksReady = true; update(); }, lost));
   scanPastAcks(nm);
 }
 
@@ -228,7 +231,9 @@ function loadPastAcksAdmin() {
 }
 
 let rT = 0;
-function update() { if (rT) return; rT = requestAnimationFrame(() => { rT = 0; compute(); render(); maybePopup(); }); }
+function update() { if (rT) return; rT = requestAnimationFrame(() => { rT = 0; compute(); render(); closeAckedPopup(); maybePopup(); }); }
+// 늦게 들어온 확인 기록으로 이미 확인한 공지가 떠 있으면 닫음
+function closeAckedPopup() { if (dlg && dlg.kind === 'notice' && dlg.must && me && !isAdm && acked(dlg.n, me)) { seenPopup[dlg.n.id] = 1; dlg = null; drawDlg(); } }
 function compute() {
   pend = {}; recs = {};
   recDocs.forEach(x => {
@@ -239,7 +244,8 @@ function compute() {
     if (x.pending) pend[k] = 1;
   });
   recDocs.forEach(x => { if (x.pending && x.data.status === '취소') pend[RK(x.data.maid, x.data.room)] = 1; });
-  const base = { date: today, label: dayDoc ? dayDoc.label || labelOf(today) : labelOf(today), items: ITEMS, noPlan: !dayDoc, notices: activeNotices() };
+  const base = { date: today, label: dayDoc ? dayDoc.label || labelOf(today) : labelOf(today), items: ITEMS, noPlan: !dayDoc, notices: activeNotices(),
+    dirty: dirtyDoc && dirtyDoc.date === today ? dirtyDoc.rooms || [] : [] };
   if (isAdm) { const b = buildAll(); data = Object.assign(base, { maids: b.maids, changes: b.changes, devices: devices }); }
   else if (me) { const b = myPlan || chgDocs.length ? buildMine() : null; data = Object.assign(base, { maids: b ? [b.m] : [], swaps: b ? b.swaps : [] }); }
   else data = Object.assign(base, { maids: (dayDoc && dayDoc.maids || []).map(n => ({ name: n, rooms: [] })) });
@@ -299,6 +305,7 @@ function render() {
     if (m) renderMaid(m, false);
     else $('#main').innerHTML = bands() + '<div class="notice"><strong>오늘 ' + esc(me) + ' 님 배정 객실이 없어요.</strong><br>휴무이거나 배정이 아직 올라오지 않았어요.</div><button class="foot" data-admin-in="1">관리자 메뉴</button>';
   }
+  try { MW.inject(); } catch (e) { console.warn('내 근무 버튼', e); }
   window.scrollTo(0, y);
 }
 function noticeBtn(name) {
@@ -332,15 +339,16 @@ function leftChip(x) {
 function memoRest(x) { return String(x.memo || '').replace(/(무재실\s*)?\d{1,2}\s*시(\s*\d{1,2}\s*분|\s*반)?(\s*[~\-]\s*\d{1,2}\s*시(\s*반)?)?\s*(까지)?\s*(우선\s*정비)?/g, '').replace(/\s{2,}/g, ' ').trim(); }
 function noteRest(x) { return String(x.note || '').split(' · ').filter(s => !/(까지 우선 정비|사이 정비|이후 정비)$/.test(s)).join(' · '); }
 const justDone = {}, lastRem = {}, shown = {}, finArmed = {};
+function isDirty(room) { return (data.dirty || []).indexOf(room) >= 0; }
 function roomCard(m, x) {
-  const r = recOf(m.name, x.room), cls = r ? ' done' : '';
+  const r = recOf(m.name, x.room), cls = r ? ' done' : (isDirty(x.room) ? ' dirty' : '');
   const hot = !r && x.due && x.due <= addMin(nowHM(), 60) ? ' duehot' : '';
   const pri = !r && (x.due || x.after) ? ' pri' : '', nt = noteRest(x), mm = memoRest(x);
   const key = RK(m.name, x.room), pop = r && justDone[key] === 1;
   if (pop) justDone[key] = 2;
   const seal = r ? '<span class="seal"><i>CHECK</i><b>정비완료</b>' + (isAdm ? '<span>' + hm(r.at) + '</span>' : '<span class="ck">✔</span>') + '</span>' : '';
   return '<button class="room' + cls + pri + hot + (pop ? ' pop' : '') + '" data-room="' + esc(x.room) + '"><span class="no">' + esc(x.room) + '</span><span class="mid">' +
-    timeLine(x, !!r) + (tagsHtml(x) ? '<span class="tags">' + tagsHtml(x) + '</span>' : '') +
+    (!r && isDirty(x.room) ? '<span class="dt">🛏 더티 완료</span>' : '') + timeLine(x, !!r) + (tagsHtml(x) ? '<span class="tags">' + tagsHtml(x) + '</span>' : '') +
     (nt ? '<span class="nt">' + esc(nt) + '</span>' : '') + (mm ? '<span class="mm">메모 · ' + esc(mm) + '</span>' : '') +
     (x.from ? '<span class="sw">↔ ' + esc(x.from) + ' 님과 교환한 객실</span>' : '') +
     (r && r.memo ? '<span class="memo-mk">✎ 내 메모 있음</span>' : '') +
@@ -358,6 +366,7 @@ function renderMaid(m, asAdmin) {
   lastRem[m.name] = rem;
   if (!asAdmin) cheer(m, d, t, rem, bump, myPend);
   const dueLeft = m.rooms.filter(x => x.due && !recOf(m.name, x.room)).sort((a, b) => (a.due < b.due ? -1 : 1));
+  const dirtyLeft = m.rooms.filter(x => isDirty(x.room) && !recOf(m.name, x.room));
   let html = asAdmin ? '' : bands() + instHtml() + ventHtml() + swapBanner(m);
   html += asAdmin ? '<div class="amode"><button class="ghost back" data-back="1">← 전체 현황</button><span>' + esc(m.name) + ' 님 화면 (객실을 누르면 대신 처리)</span></div>' : '';
   html += '<section class="sum' + (allDone ? ' alldone' : '') + '"><div class="who"><b>' + esc(m.name) + '</b> 님 · ' + esc(m.floors) + '</div>' +
@@ -365,6 +374,7 @@ function renderMaid(m, asAdmin) {
     '<span class="of">완료 ' + d + ' / ' + t + '</span></div><div class="meter"><i style="width:' + (t ? d / t * 100 : 0) + '%"></i></div>' +
     (rem === 0 && t > 0 && myPend ? '<div class="saving">⏳ 마지막 기록을 저장하는 중이에요…</div>' : '') +
     (dueLeft.length ? '<div class="alert">⏰ 시간 정해진 객실 ' + dueLeft.length + '실 남음 · ' + dueLeft.map(x => '<button class="jump" data-jump="' + esc(x.room) + '">' + esc(x.room) + ' (' + hmK(x.due) + ')</button>').join(' ') + '</div>' : '') +
+    (dirtyLeft.length ? '<div class="dirtyline">🛏 더티 끝난 방 ' + dirtyLeft.length + '실 · ' + dirtyLeft.map(x => '<button class="jump" data-jump="' + esc(x.room) + '">' + esc(x.room) + '</button>').join(' ') + '</div>' : '') +
     '</section>';
   html += '<p class="sec">오늘 객실</p>' + sortRooms(m).map(x => roomCard(m, x)).join('');
   html += '<button class="addbtn" data-addroom="1">+ 객실 추가</button>';
@@ -374,7 +384,7 @@ function renderMaid(m, asAdmin) {
       (self || asAdmin ? '<button class="restore" data-restore="' + esc(x.room) + '">다시 넣기</button>' : '제외') + '</span></div>';
   }).join('');
   html += '<p class="sec" style="font-weight:500">객실을 누르면 자가인스펙션 4개 항목을 확인하고 완료할 수 있어요.</p>';
-  if (!asAdmin) html += '<p class="sec" style="font-weight:500">📅 내 근무 · 연차 신청은 시험 기간 동안 지금 쓰시는 앱에서 해 주세요.</p><button class="foot" data-admin-in="1">관리자 메뉴</button>';
+  if (!asAdmin) html += '<button class="foot" data-admin-in="1">관리자 메뉴</button>';
   $('#main').innerHTML = html;
 }
 // 절반 응원은 바로, 마지막 폭죽은 서버 저장 확인 뒤
@@ -461,6 +471,8 @@ function renderAdmin() {
       : '<div class="r"><span>아직 등록된 휴대폰이 없어요.</span><span></span></div>') + '</div>' +
     (unreg.length ? '<p class="rec" style="margin:8px 0 0">새 앱 미등록 ' + unreg.length + '명: ' + esc(unreg.join(', ')) + '</p>' : '') +
     (devs.length ? '<div class="acts" style="margin-top:8px"><button class="danger" data-release-all="1">등록 전체 해제 (' + devs.length + '대)</button></div>' : '') + '</div>';
+  if (errDocs.length) html += '<div class="card"><h3>📵 휴대폰 오류 (오늘 ' + errDocs.length + '건)</h3><p class="rec" style="margin:0 0 6px">메이드 휴대폰에서 생긴 문제예요. 같은 오류가 여러 번 보이면 Claude 에게 이 화면을 보여 주세요.</p><div class="list">' +
+    errDocs.slice(0, 10).map(x => '<div class="r"><span><b>' + esc(x.name || '이름 없음') + '</b> · ' + esc(x.where || '') + '<br><small>' + esc(String(x.msg || '').slice(0, 160)) + '</small></span><span>' + hm(x.at) + '</span></div>').join('') + '</div></div>';
   html += '<p class="rec" style="text-align:center">새 앱 ' + APP_VER + '</p>';
   $('#main').innerHTML = html;
 }
@@ -471,6 +483,7 @@ function renderAdmin() {
 function failKey() { return 'rm2_failed'; }
 function myFails() { return isAdm ? [] : lsJson(failKey(), []).filter(f => f.date === today && (!me || f.maid === me)); }
 function onWriteFail(item, e) {
+  report('저장', item.room + '호 ' + (e && e.code || '') + ' ' + (e && e.message || e));
   console.warn('저장 거절', item, e);
   if (String(e && e.code) !== 'permission-denied') { say(errText(e)); return; }
   const list = lsJson(failKey(), []).filter(f => !(f.date === item.date && f.room === item.room && f.maid === item.maid));
@@ -557,6 +570,8 @@ async function swapCheck(maid, mine, otherNo) {
 const seenPopup = {};
 function maybePopup() {
   if (dlg || isAdm || !data || !me) return;
+  // 내 확인 기록(오늘 + 지난 13일 훑기)을 서버에서 다 받은 뒤에만 띄움 — 앱을 다시 열 때 이미 확인한 공지가 또 뜨지 않게
+  if (!offline() && (!acksReady || lsGet('rm2_ackscan_' + me) !== today)) return;
   const n = myNotices(me).filter(x => x.popup && !acked(x, me) && !seenPopup[x.id])[0];
   if (n) openNotice(n, true);
 }
@@ -638,6 +653,7 @@ function btns(cancel, ok, enabled, cls) { return '<div class="acts"><button data
 function errP() { return dlg.err ? '<p class="err">' + esc(dlg.err) + '</p>' : ''; }
 function drawDlg() {
   const el = $('#sheet');
+  if (dlg && dlg.kind === 'mywork') { MW.draw(); return; }
   if (!dlg || !data) { el.innerHTML = ''; return; }
   const k = dlg.kind; let body = '', cls = 'panel';
   if (k === 'room') {
@@ -696,7 +712,9 @@ function drawDlg() {
   } else if (k === 'proxyask') body = '<h3>' + esc(dlg.maid) + ' 님 대신 처리할까요?</h3><p>' + esc(dlg.room) + '호 · 기록에 "관리자 대신"이 표시돼요.</p>' + btns('취소', '대신 처리', true);
   el.innerHTML = '<div class="scrim"' + (k === 'notice' && dlg.must ? '' : ' data-x="1"') + '><div class="' + cls + '">' + body + '</div></div>';
 }
-function closeDlg() { const wasN = dlg && dlg.kind === 'notice'; if (wasN) seenPopup[dlg.n.id] = 1; dlg = null; drawDlg(); if (wasN) maybePopup(); }
+function closeDlg() {
+  if (dlg && dlg.kind === 'mywork') { if (MW.back()) return; dlg = null; drawDlg(); MW.closed(); return; }
+  const wasN = dlg && dlg.kind === 'notice'; if (wasN) seenPopup[dlg.n.id] = 1; dlg = null; drawDlg(); if (wasN) maybePopup(); }
 function failDlg(e) { busy = false; if (dlg) { dlg.err = e && e.message ? e.message.replace(/^Error:\s*/, '') : errText(e); drawDlg(); } }
 
 // ---------- 입력
@@ -817,6 +835,39 @@ function onSheet(t, at) {
   }
   if (d0.kind === 'proxyask') { dlg = { kind: 'room', maid: d0.maid, room: d0.room, proxy: true }; drawDlg(); }
 }
+
+// =====================================================================
+// 내 근무 · 연차 (서버 = 기존 Apps Script. 본인 확인은 Firebase 로그인 표)
+// =====================================================================
+async function callOld(fn, args) {
+  let t;
+  try { t = await S.idToken(); } catch (e) { throw new Error('로그인 정보를 가져오지 못했어요. 인터넷 연결을 확인해 주세요.'); }
+  let r;
+  try { r = await fetch(OLD_APP, { method: 'POST', body: JSON.stringify({ fn, idToken: t, args: args || [] }) }); }
+  catch (e) { throw new Error('인터넷 연결을 확인하고 다시 해 주세요.'); }
+  let j;
+  try { j = await r.json(); } catch (e) { throw new Error('서버 응답을 읽지 못했어요. 잠시 후 다시 해 주세요.'); }
+  if (!j || !j.ok) throw new Error(j && j.error || '처리하지 못했어요.');
+  return j.data;
+}
+const MW = setupMyWork({ esc, lsGet, lsSet, toast, vibe, call: callOld, me: () => me, isAdm: () => isAdm, dlg: () => dlg, setDlg: d => { dlg = d; }, closeDlg: () => closeDlg() });
+
+// =====================================================================
+// 휴대폰 오류 자동 기록 → Firestore errors (관리자 화면 '📵 휴대폰 오류'). 같은 오류는 한 번, 한 번 열 때 최대 5건
+// =====================================================================
+const errSent = {};
+let errCount = 0;
+function report(where, msg) {
+  try {
+    const m = String(msg || '').slice(0, 500), k = where + '|' + m;
+    if (!user || errSent[k] || errCount >= 5) return;
+    errSent[k] = 1; errCount++;
+    S.add('errors', { at: S.SERVER_TIME, day: today, uid: user.uid, name: me || (isAdm ? '관리자' : ''), ver: APP_VER, where: String(where).slice(0, 40), msg: m, ua: navigator.userAgent.slice(0, 200) })
+      .done.catch(() => {});
+  } catch (e) {}
+}
+window.addEventListener('error', e => report('화면', (e.message || '') + ' @' + String(e.filename || '').split('/').pop() + ':' + (e.lineno || '')));
+window.addEventListener('unhandledrejection', e => report('화면', 'promise: ' + (e.reason && (e.reason.message || e.reason) || '')));
 
 // =====================================================================
 // 시계: 날짜 바뀜 · 남은 시간 · 연결 상태 · 새 버전

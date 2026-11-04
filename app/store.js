@@ -53,6 +53,8 @@ export function onUser(cb) {
 export function signInAnon() { return signInAnonymously(auth); }
 export function signInEmail(email, pw) { return signInWithEmailAndPassword(auth, email, pw); }
 export function signOut() { return fbSignOut(auth); }
+// 로그인 표 (Apps Script '내 근무' 연결에서 본인 확인용). 만료됐으면 새로 받음
+export async function idToken() { const u = auth.currentUser; if (!u) throw new Error('로그인 안 됨'); return u.getIdToken(); }
 
 // ---------- 읽기 (실시간)
 // cb(data|null, { pending: 휴대폰에만 있고 아직 서버에 안 간 것, fromCache: 서버와 연결 안 된 상태의 값 })

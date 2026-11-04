@@ -63,6 +63,7 @@ async function cleanup(anonUid){
   for (const s of sub) { const q = await getDocs(collection(db, 'days', T, s)); for (const d of q.docs) await deleteDoc(d.ref); }
   await deleteDoc(D('days', T));
   await deleteDoc(D('notices', 'zz_check'));
+  const eq = await getDocs(query(collection(db, 'errors'), where('day', '==', T))); for (const d of eq.docs) await deleteDoc(d.ref);
   if (anonUid) await deleteDoc(D('devices', anonUid));
 }
 
@@ -115,6 +116,10 @@ $('#go').onclick = async () => {
     await t('휴대폰 등록 목록 보기', false, () => getDocs(collection(db, 'devices')));
     await t('날짜·명단 고치기', false, () => setDoc(D('days', T), { label: 'x', maids: [] }));
     await t('규칙에 없는 곳에 쓰기', false, () => setDoc(D('etc', 'x'), { a: 1 }));
+    const err = extra => Object.assign({ at: serverTimestamp(), day: T, uid: auth.currentUser.uid, name: A, ver: 'check', where: '점검', msg: '규칙 점검', ua: 'check' }, extra || {});
+    await t('휴대폰 오류 기록 남기기 (v2)', true, () => addDoc(collection(db, 'errors'), err()));
+    await t('남의 이름표로 오류 기록 (v2)', false, () => addDoc(collection(db, 'errors'), err({ uid: 'someone-else' })));
+    await t('오류 기록 보기 (v2)', false, () => getDocs(collection(db, 'errors')));
     try { await auth.currentUser.delete(); } catch (e) {}
     await signOut(auth);
 
@@ -123,6 +128,7 @@ $('#go').onclick = async () => {
     await t('관리자 · 전체 기록 보기', true, () => getDocs(collection(db, 'days', T, 'recs')));
     await t('관리자 · 대신 완료', true, () => setDoc(D('days', T, 'recs', '402_' + B), rec('402', B, { proxy: true })));
     await t('관리자 · 휴대폰 등록 목록', true, () => getDocs(collection(db, 'devices')));
+    await t('관리자 · 휴대폰 오류 보기 (v2)', true, () => getDocs(query(collection(db, 'errors'), where('day', '==', T))));
     await t('관리자 · 시험 자료 지우기', true, () => cleanup(anonUid));
     await signOut(auth);
   } catch (e) {
