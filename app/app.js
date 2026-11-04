@@ -3,7 +3,7 @@
 import * as S from './store.js';
 import { setupMyWork } from './mywork.js';
 
-const APP_VER = '2026.11.05-1';
+const APP_VER = '2026.11.05-2';
 // 관리자 = 보안 규칙 isAdmin 과 같은 목록 (UID 는 공개돼도 되는 값)
 const ADMINS = [
   { uid: 'iw2orXgIgPgTbLUQa0b41XJ9Dvd2', label: '소장', email: 'unieshaeundae+admin@gmail.com' },
@@ -32,7 +32,7 @@ const VENT_FROM = '12:00', VENT_TO = '13:30';
 let user = null, isAdm = false, me = null, devState = 'wait';   // devState: wait / none / ok
 let today = seoulDate(), dayDoc = undefined, dayCache = false, cacheSince = 0;
 let myPlan = null, plans = {}, chgDocs = [], recDocs = [], ackDocs = [], notices = [], devices = [], relay = null;
-let roomInfo = {}, infoAsked = {}, pastAcks = {}, dirtyDoc = null, acksReady = false, errDocs = [];
+let roomInfo = {}, infoAsked = {}, pastAcks = {}, dirtyDoc = null, acksReady = false, errDocs = [], cmp = null;
 let data = null, recs = {}, pend = {}, dlg = null, busy = false, viewMaid = null;
 let subs = [], meSubs = [], newVer = '';
 const W = room => (ROYAL[room] ? 2 : 1);
@@ -100,6 +100,7 @@ function start() {
     subs.push(S.listenQuery(D + '/acks', [], docs => { ackDocs = docs; update(); }));
     subs.push(S.listenQuery('devices', [], docs => { devices = docs.map(x => Object.assign({ uid: x.id }, x.data)); update(); }));
     subs.push(S.listenDoc('meta/relay', d => { relay = d; update(); }));
+    subs.push(S.listenDoc('meta/compare', d => { cmp = d; update(); }, () => {}));
     subs.push(S.listenQuery('errors', [['day', '==', today]], docs => { errDocs = docs.map(x => x.data).sort((a, b) => (b.at || 0) - (a.at || 0)); update(); }, () => {}));
     loadPastAcksAdmin();
   } else {
@@ -412,6 +413,13 @@ function relayLine() {
   const min = Math.max(0, Math.round((Date.now() - relay.at) / 60000)), bad = !relay.ok || min > 12;
   return '<span class="relay' + (bad ? ' bad' : '') + '">시트 중계 ' + (min ? min + '분 전' : '방금') + ' · ' + (relay.ok ? '정상' : '오류: ' + esc(String(relay.err || '').slice(0, 80))) + (min > 12 ? ' · 오래 멈춤' : '') + '</span>';
 }
+// 매일 대조 (중계가 12·15·18·21시에 앱 기록 vs 시트 정비기록 비교 → meta/compare)
+function cmpLine() {
+  if (!cmp || cmp.day !== today) return '<div class="relay">오늘 대조: 12시에 처음 해요</div>';
+  const when = cmp.slot === '수동' ? hm(cmp.at) + ' 수동' : cmp.slot + '시';
+  if (cmp.ok) return '<div class="relay">오늘 대조 ' + esc(when) + ' · 앱 ' + cmp.app + ' = 시트 ' + cmp.sheet + ' · 차이 0건 ✅</div>';
+  return '<div class="relay bad">오늘 대조 ' + esc(when) + ' · 차이 ' + cmp.n + '건 ⚠ ' + (cmp.diffs || []).slice(0, 5).map(x => esc(x.room + ' ' + x.maid + ' (앱 ' + (x.app || '없음') + ' / 시트 ' + (x.sheet || '없음') + ')')).join(', ') + (cmp.n > 5 ? ' …' : '') + '</div>';
+}
 function renderAdmin() {
   let all = 0, done = 0; const issues = [], dueRows = [];
   data.maids.forEach(m => m.rooms.forEach(x => {
@@ -423,7 +431,7 @@ function renderAdmin() {
   const now = nowHM(), nts = data.notices || [];
   let html = bands() + '<div class="amode"><b>관리자 모드</b><span class="trial">새 앱 시험</span><span>메이드를 누르면 그 화면을 볼 수 있어요.</span>' +
     '<a class="ghost" href="' + OLD_APP + '" target="_blank" rel="noopener">📢 공지 · 📋 연차 관리 (기존 앱)</a><button class="ghost" data-admin-off="1">관리자 모드 끄기</button></div>' +
-    '<div>' + relayLine() + '</div>' +
+    '<div>' + relayLine() + '</div>' + cmpLine() +
     (data.noPlan ? '<div class="alert" style="margin-top:0">⚠ 오늘 배정이 아직 앱에 없어요. 더티 배분 폴더에 오늘 rm_rows 파일을 올리면 1~2분 안에 들어와요.</div>' : '') +
     '<div class="kpis"><div class="kpi"><b>' + done + '<small style="font-size:14px">/' + all + '</small></b><span>완료 객실</span></div><div class="kpi"><b>' + dueRows.length + '</b><span>시간 정해진 미완료</span></div><div class="kpi"><b>' + issues.length + '</b><span>메모 남긴 객실</span></div></div>';
   html += '<p class="sec" style="margin-top:0">메이드별 진행 (' + data.maids.length + '명)</p><div class="mgrid">' + data.maids.map(m => {
