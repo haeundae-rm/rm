@@ -63,6 +63,7 @@ async function cleanup(anonUid){
   for (const s of sub) { const q = await getDocs(collection(db, 'days', T, s)); for (const d of q.docs) await deleteDoc(d.ref); }
   await deleteDoc(D('days', T));
   await deleteDoc(D('notices', 'zz_check'));
+  await deleteDoc(D('uploads', 'zz_check'));
   const eq = await getDocs(query(collection(db, 'errors'), where('day', '==', T))); for (const d of eq.docs) await deleteDoc(d.ref);
   if (anonUid) await deleteDoc(D('devices', anonUid));
 }
@@ -82,6 +83,7 @@ $('#go').onclick = async () => {
       await setDoc(D('days', T, 'owners', '402'), { maids: [B] });
     });
     await t('관리자 · 공지 쓰기', true, () => setDoc(D('notices', 'zz_check'), { title: '규칙 점검' }));
+    await t('관리자 · 정비보고서 배정표 올리기 (v3)', true, () => setDoc(D('uploads', 'zz_check'), { date: T, csv: '날짜,메이드,객실\r\n', state: 'check' }));
     await signOut(auth);
 
     // 2) 메이드처럼 (익명 로그인)
@@ -120,6 +122,8 @@ $('#go').onclick = async () => {
     await t('휴대폰 오류 기록 남기기 (v2)', true, () => addDoc(collection(db, 'errors'), err()));
     await t('남의 이름표로 오류 기록 (v2)', false, () => addDoc(collection(db, 'errors'), err({ uid: 'someone-else' })));
     await t('오류 기록 보기 (v2)', false, () => getDocs(collection(db, 'errors')));
+    await t('메이드가 올린 배정표 보기 (v3)', false, () => getDoc(D('uploads', 'zz_check')));
+    await t('메이드가 배정표 올리기 (v3)', false, () => setDoc(D('uploads', 'zz_check2'), { date: T, csv: 'x', state: 'wait' }));
     try { await auth.currentUser.delete(); } catch (e) {}
     await signOut(auth);
 
@@ -128,6 +132,7 @@ $('#go').onclick = async () => {
     await t('관리자 · 전체 기록 보기', true, () => getDocs(collection(db, 'days', T, 'recs')));
     await t('관리자 · 대신 완료', true, () => setDoc(D('days', T, 'recs', '402_' + B), rec('402', B, { proxy: true })));
     await t('관리자 · 휴대폰 등록 목록', true, () => getDocs(collection(db, 'devices')));
+    await t('관리자 · 올린 배정표 보기 (v3)', true, () => getDoc(D('uploads', 'zz_check')));
     await t('관리자 · 휴대폰 오류 보기 (v2)', true, () => getDocs(query(collection(db, 'errors'), where('day', '==', T))));
     await t('관리자 · 시험 자료 지우기', true, () => cleanup(anonUid));
     await signOut(auth);

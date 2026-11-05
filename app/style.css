@@ -320,3 +320,13 @@ main{padding:16px 16px 56px;max-width:760px;margin:0 auto;display:flex;flex-dire
 .mw-done .ic{font-size:56px;line-height:1}
 .mw-done h3{font-size:22px;margin:0}
 .mw-done p{margin:0;font-size:16px;color:var(--muted);line-height:1.6}
+/* 정비보고서 올리기 (⑦ 2026-11-05) */
+.upcard .upbtn{width:100%;min-height:48px;border-radius:12px;font:700 16px var(--f-body);margin-bottom:6px}
+.upsum{margin:10px 0 4px;font-size:15px;line-height:1.55}
+.upsum p{margin:4px 0}
+.upchk{list-style:none;margin:6px 0;padding:0;font-size:14px}
+.upchk li{padding:2px 0}
+.upchk li.no{color:var(--warn-red);font-weight:700}
+.upsum details{margin-top:6px;font-size:14px}
+.upsum summary{cursor:pointer;color:var(--muted)}
+.upcard .upbtn{background:var(--navy);color:#fff;border:0;cursor:pointer}

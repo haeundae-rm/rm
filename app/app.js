@@ -3,7 +3,7 @@
 import * as S from './store.js';
 import { setupMyWork } from './mywork.js';
 
-const APP_VER = '2026.11.05-4';
+const APP_VER = '2026.11.05-5';
 // 관리자 = 보안 규칙 isAdmin 과 같은 목록 (UID 는 공개돼도 되는 값)
 const ADMINS = [
   { uid: 'iw2orXgIgPgTbLUQa0b41XJ9Dvd2', label: '소장', email: 'unieshaeundae+admin@gmail.com' },
@@ -32,7 +32,7 @@ const VENT_FROM = '12:00', VENT_TO = '13:30';
 let user = null, isAdm = false, me = null, devState = 'wait';   // devState: wait / none / ok
 let today = seoulDate(), dayDoc = undefined, dayCache = false, cacheSince = 0;
 let myPlan = null, plans = {}, chgDocs = [], recDocs = [], ackDocs = [], notices = [], devices = [], relay = null;
-let roomInfo = {}, infoAsked = {}, pastAcks = {}, dirtyDoc = null, acksReady = false, errDocs = [], cmp = null;
+let roomInfo = {}, infoAsked = {}, pastAcks = {}, dirtyDoc = null, acksReady = false, errDocs = [], cmp = null, upDoc = null;
 let data = null, recs = {}, pend = {}, dlg = null, busy = false, viewMaid = null;
 let subs = [], meSubs = [], newVer = '';
 const W = room => (ROYAL[room] ? 2 : 1);
@@ -101,6 +101,7 @@ function start() {
     subs.push(S.listenQuery('devices', [], docs => { devices = docs.map(x => Object.assign({ uid: x.id }, x.data)); update(); }));
     subs.push(S.listenDoc('meta/relay', d => { relay = d; update(); }));
     subs.push(S.listenDoc('meta/compare', d => { cmp = d; update(); }, () => {}));
+    subs.push(S.listenDoc('uploads/latest', d => { upDoc = d; update(); }, () => {}));   // 정비보고서 올림 상태 (⑦)
     subs.push(S.listenQuery('errors', [['day', '==', today]], docs => { errDocs = docs.map(x => x.data).sort((a, b) => (b.at || 0) - (a.at || 0)); update(); }, () => {}));
     loadPastAcksAdmin();
   } else {
@@ -421,6 +422,74 @@ function cmpLine() {
   if (cmp.ok) return '<div class="relay">오늘 대조 ' + esc(when) + ' · 앱 ' + cmp.app + ' = 시트 ' + cmp.sheet + ' · 차이 0건 ✅</div>';
   return '<div class="relay bad">오늘 대조 ' + esc(when) + ' · 차이 ' + cmp.n + '건 ⚠ ' + (cmp.diffs || []).slice(0, 5).map(x => esc(x.room + ' ' + x.maid + ' (앱 ' + (x.app || '없음') + ' / 시트 ' + (x.sheet || '없음') + ')')).join(', ') + (cmp.n > 5 ? ' …' : '') + '</div>';
 }
+// ---------- 정비보고서 올리기 (⑦ 2026-11-05): 엑셀을 이 기기에서 읽어 배정표를 만들고 → uploads/latest → 중계가 드라이브·배정 탭 → 앱
+function upLine() {
+  const u = upDoc; if (!u || !u.date) return '';
+  const d = u.date.slice(5).replace('-', '/'), when = hm(u.at);
+  if (u.state === 'wait') { const late = u.at && Date.now() - u.at > 4 * 60000;
+    return '<div class="relay' + (late ? ' bad' : '') + '">⏳ ' + esc(d) + ' 배정표 올림 ' + esc(when) + ' · ' + (late ? '중계가 늦어요 — 위 시트 중계 상태를 확인해 주세요' : '시트에 넣는 중 (1~2분)') + '</div>'; }
+  if (u.state === 'done') return '<div class="relay">✅ ' + esc(d) + ' 배정표 반영 완료 ' + esc(hm(u.doneAt)) + ' · ' + esc(u.msg || '') + (u.who ? ' · ' + esc(u.who) : '') + '</div>';
+  return '<div class="relay bad">❌ ' + esc(d) + ' 배정표 반영 실패 · ' + esc(u.msg || '') + ' — 다시 올려 주세요</div>';
+}
+function upCard() {
+  return '<div class="card upcard"><h3>📥 정비보고서 올리기</h3><p class="rec" style="margin:0 0 8px">정비보고서 엑셀(.xlsx)을 고르면 이 기기에서 바로 배정표를 만들어 확인 화면을 보여 줘요. <b>올리기</b>를 누르면 1~2분 안에 메이드 휴대폰에 들어가요.</p>' +
+    '<button class="go upbtn" data-upload="1">정비보고서 파일 고르기</button>' + upLine() + '</div>';
+}
+function upDefaultDate() { return nowHM() >= '15:00' ? addDays(seoulDate(), 1) : seoulDate(); }
+function pickXlsx() {
+  const inp = document.createElement('input');
+  inp.type = 'file'; inp.accept = '.xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'; inp.style.display = 'none';
+  inp.addEventListener('change', () => {
+    const f = inp.files && inp.files[0]; inp.remove();
+    if (!f) return;
+    dlg = { kind: 'upload', file: f.name, date: upDefaultDate(), res: null, err: '' }; busy = true; drawDlg();
+    f.arrayBuffer().then(buf => { if (dlg && dlg.kind === 'upload') { dlg.buf = buf; return upBuild(); } }).catch(e => { busy = false; if (dlg) { dlg.err = '파일을 읽지 못했어요: ' + (e && e.message || e); drawDlg(); } });
+  });
+  document.body.appendChild(inp); inp.click();
+}
+let engine = null;
+async function upBuild() {
+  const d0 = dlg; busy = true; d0.res = null; d0.err = ''; drawDlg();
+  try {
+    if (typeof DecompressionStream === 'undefined') throw new Error('이 브라우저는 엑셀 읽기를 지원하지 않아요. PC 크롬이나 최신 휴대폰에서 해 주세요.');
+    if (!engine) engine = await import(new URL('engine.js?v=' + APP_VER, import.meta.url).href);
+    const res = await engine.buildFromXlsx(d0.buf, d0.date);
+    if (dlg === d0) d0.res = res;
+  } catch (e) { if (dlg === d0) d0.err = String(e && e.message || e); report('정비보고서', String(e && e.message || e)); }
+  busy = false; if (dlg === d0) drawDlg();
+}
+function upBody() {
+  const d0 = dlg, r = d0.res, s = r && r.summary, t0 = seoulDate(), t1 = addDays(t0, 1);
+  const dbtn = (d, l) => '<button data-update="' + d + '" aria-pressed="' + (d0.date === d) + '">' + l + ' ' + d.slice(5).replace('-', '/') + '</button>';
+  let b = '<h3>정비보고서 → 배정표 확인</h3><p class="rec" style="margin:0 0 8px">📄 ' + esc(d0.file) + '</p>' +
+    '<div class="seg2">' + dbtn(t0, '오늘') + dbtn(t1, '내일') + '</div>';
+  if (busy && !r) b += '<p class="rec">엑셀을 읽는 중…</p>';
+  if (d0.err) b += '<p class="err">' + esc(d0.err) + '</p>';
+  if (s) {
+    b += '<div class="upsum"><p><b>' + esc(r.sheet) + '일 시트</b> · 메이드 <b>' + s.maids + '명</b> · 객실 <b>' + s.rooms + '개</b> = ' + s.units + '실 (로얄 2실)</p>' +
+      '<ul class="upchk">' + s.checks.map(c => '<li class="' + (c.ok ? 'ok' : 'no') + '">' + (c.ok ? '✅ ' : '❌ ') + esc(c.msg) + '</li>').join('') + '</ul>' +
+      '<p class="rec">' + Object.keys(s.tags).sort((a, b) => s.tags[b] - s.tags[a]).map(k => esc(k) + ' ' + s.tags[k]).join(' · ') + '</p>' +
+      (s.groups.length ? '<p class="rec">단체: ' + s.groups.map(g => esc(g.name) + '(' + g.rooms + '실' + (g.time ? ', 입실 ' + esc(g.time) : '') + ')').join(' / ') + '</p>' : '') +
+      (s.due.length ? '<p class="rec">시간 지정: ' + s.due.map(x => esc(x.room) + '(' + esc(x.maid) + ') ' + esc(x.due)).join(', ') + '</p>' : '') +
+      '<details><summary>메이드별 객실 수</summary><p class="rec">' + upPerMaid(r.rows) + '</p></details></div>';
+    if (!s.ok) b += '<div class="warnbox"><b>검증에서 다른 점이 있어요.</b> 정비보고서를 확인하고 고친 뒤 다시 올리는 게 좋아요.</div>';
+    if (d0.date === today && recDocs.length) b += '<div class="warnbox">오늘 이미 완료 기록이 ' + recDocs.length + '건 있어요. 배정이 바뀌어도 <b>완료 기록은 그대로</b> 남아요.</div>';
+    if (upDoc && upDoc.date === d0.date && upDoc.state === 'done') b += '<p class="hint">' + esc(d0.date.slice(5).replace('-', '/')) + ' 배정표는 ' + esc(hm(upDoc.doneAt)) + '에 이미 올렸어요. 올리면 새 파일로 바뀌어요.</p>';
+  }
+  return b + btns('취소', s && !s.ok ? '그래도 올리기' : '앱에 올리기', !!s, s && !s.ok ? 'danger' : 'go');
+}
+function upPerMaid(rows) {
+  const c = {}, o = []; rows.forEach(r => { if (!(r[1] in c)) { c[r[1]] = 0; o.push(r[1]); } c[r[1]] += W(r[2]); });
+  return o.map(n => esc(n) + ' ' + c[n]).join(' · ');
+}
+function upSend(d0) {
+  const r = d0.res, s = r.summary, who = (ADMINS.filter(a => a.uid === user.uid)[0] || {}).label || '';
+  busy = true; drawDlg();
+  withTimeout(S.set('uploads/latest', { date: d0.date, csv: r.csv, state: 'wait', at: S.SERVER_TIME, by: user.uid, who, file: String(d0.file).slice(0, 80),
+    sheet: r.sheet, maids: s.maids, rooms: s.rooms, units: s.units, ok: s.ok }), 20000, '인터넷 연결을 확인하고 다시 눌러 주세요.')
+    .then(() => { busy = false; dlg = null; drawDlg(); say(d0.date.slice(5).replace('-', '/') + ' 배정표를 올렸어요. 1~2분 안에 메이드 휴대폰에 들어가요.'); })
+    .catch(failDlg);
+}
 function renderAdmin() {
   let all = 0, done = 0; const issues = [], dueRows = [];
   data.maids.forEach(m => m.rooms.forEach(x => {
@@ -433,7 +502,7 @@ function renderAdmin() {
   let html = bands() + '<div class="amode"><b>관리자 모드</b><span class="trial">새 앱 시험</span><span>메이드를 누르면 그 화면을 볼 수 있어요.</span>' +
     '<a class="ghost" href="' + OLD_APP + '" target="_blank" rel="noopener">📢 공지 · 📋 연차 관리 (기존 앱)</a><button class="ghost" data-admin-off="1">관리자 모드 끄기</button></div>' +
     '<div>' + relayLine() + '</div>' + cmpLine() +
-    (data.noPlan ? '<div class="alert" style="margin-top:0">⚠ 오늘 배정이 아직 앱에 없어요. 더티 배분 폴더에 오늘 rm_rows 파일을 올리면 1~2분 안에 들어와요.</div>' : '') +
+    (data.noPlan ? '<div class="alert" style="margin-top:0">⚠ 오늘 배정이 아직 앱에 없어요. 아래 <b>정비보고서 올리기</b>로 올리면 1~2분 안에 들어와요.</div>' : '') + upCard() +
     '<div class="kpis"><div class="kpi"><b>' + done + '<small style="font-size:14px">/' + all + '</small></b><span>완료 객실</span></div><div class="kpi"><b>' + dueRows.length + '</b><span>시간 정해진 미완료</span></div><div class="kpi"><b>' + issues.length + '</b><span>메모 남긴 객실</span></div></div>';
   html += '<p class="sec" style="margin-top:0">메이드별 진행 (' + data.maids.length + '명)</p><div class="mgrid">' + data.maids.map(m => {
     const d = doneCount(m), t = totalUnits(m), ic = m.rooms.filter(x => { const r = recOf(m.name, x.room); return r && r.memo; }).length;
@@ -718,7 +787,8 @@ function drawDlg() {
       body = '<h3>' + esc(pv.owner) + ' 님과 객실을 바꿀까요?</h3><div class="swapline"><span>' + esc(pv.mine) + '<small>' + (dlg.proxy ? esc(dlg.maid) + ' 님' : '내 객실') + '</small></span><span>↔</span><span>' + esc(pv.other) + '<small>' + esc(pv.owner) + ' 님</small></span></div>' +
         (dw ? '<div class="warnbox"><b>실 수가 달라져요.</b> 로얄 객실(3001·3002·3101·3102)은 2실로 계산돼요.</div>' : '') +
         '<p class="hint">바꾸면 두 분 화면이 바로 바뀌고, ' + esc(pv.owner) + ' 님 화면에도 알림이 떠요. 시간·단체 표시는 객실을 따라가요.</p>' + errP() + btns('취소', '교환하기', true); }
-  } else if (k === 'proxyask') body = '<h3>' + esc(dlg.maid) + ' 님 대신 처리할까요?</h3><p>' + esc(dlg.room) + '호 · 기록에 "관리자 대신"이 표시돼요.</p>' + btns('취소', '대신 처리', true);
+  } else if (k === 'upload') body = upBody();
+  else if (k === 'proxyask') body = '<h3>' + esc(dlg.maid) + ' 님 대신 처리할까요?</h3><p>' + esc(dlg.room) + '호 · 기록에 "관리자 대신"이 표시돼요.</p>' + btns('취소', '대신 처리', true);
   el.innerHTML = '<div class="scrim"' + (k === 'notice' && dlg.must ? '' : ' data-x="1"') + '><div class="' + cls + '">' + body + '</div></div>';
 }
 function closeDlg() {
@@ -762,6 +832,7 @@ document.addEventListener('click', e => {
   const pk = at('[data-pick]'); if (pk) { dlg = { kind: 'claim', name: pk.getAttribute('data-pick') }; drawDlg(); return; }
   if (at('[data-admin-in]')) { dlg = { kind: 'login', who: 0, pw: '' }; drawDlg(); return; }
   if (at('[data-admin-off]')) { S.signOut(); return; }
+  if (at('[data-upload]')) { pickXlsx(); return; }
   if (at('[data-release-all]')) { dlg = { kind: 'releaseall' }; drawDlg(); return; }
   const rl = at('[data-release]'); if (rl) { dlg = { kind: 'release', name: rl.getAttribute('data-release') }; drawDlg(); return; }
   const jp = at('[data-jump]'); if (jp) { const el = document.querySelector('[data-room="' + jp.getAttribute('data-jump') + '"]'); if (el) { el.scrollIntoView({ behavior: 'smooth', block: 'center' }); el.classList.remove('flash'); void el.offsetWidth; el.classList.add('flash'); } return; }
@@ -788,6 +859,7 @@ function onSheet(t, at) {
   const os = at('[data-inst-os]'); if (os && dlg && dlg.kind === 'instguide') { dlg.os = os.getAttribute('data-inst-os'); drawDlg(); return; }
   if (at('[data-inst-poster]')) { const pn = instPoster(dlg.os); if (pn) openNotice(pn, false); return; }
   const wh = at('[data-who]'); if (wh && dlg && dlg.kind === 'login') { const pw = $('#apw'); dlg.pw = pw ? pw.value : ''; dlg.who = Number(wh.getAttribute('data-who')); drawDlg(); return; }
+  const ud = at('[data-update]'); if (ud && dlg && dlg.kind === 'upload') { dlg.date = ud.getAttribute('data-update'); if (dlg.buf) upBuild(); else drawDlg(); return; }
   const op = at('[data-open]'); if (op) { const list = isAdm ? (data.notices || []) : myNotices(me); openNotice(list[Number(op.getAttribute('data-open'))], false); return; }
   const a = at('[data-act]'), act = a && a.getAttribute('data-act');
   if (dlg && dlg.kind === 'room' && act) {
@@ -816,6 +888,7 @@ function onSheet(t, at) {
     S.signInEmail(ADMINS[d0.who || 0].email, pw).then(() => { busy = false; dlg = null; drawDlg(); window.scrollTo(0, 0); }).catch(e => { busy = false; d0.pw = ''; d0.err = errText(e); drawDlg(); });
     return;
   }
+  if (d0.kind === 'upload') { if (d0.res) upSend(d0); return; }
   if (d0.kind === 'releaseall') { const list = (data.devices || []).slice(); dlg = null; drawDlg(); Promise.all(list.map(x => S.del('devices/' + x.uid))).then(() => say('휴대폰 등록을 모두 해제했어요.')).catch(e => say(errText(e))); return; }
   if (d0.kind === 'release') { const list = (data.devices || []).filter(x => x.name === d0.name); dlg = null; drawDlg(); Promise.all(list.map(x => S.del('devices/' + x.uid))).then(() => say(d0.name + ' 님 휴대폰 등록을 해제했어요.')).catch(e => say(errText(e))); return; }
   if (d0.kind === 'addroom') {
