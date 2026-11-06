@@ -465,3 +465,4 @@ body.adm main>.alert{background:var(--red-soft);color:var(--warn-red)}
 @media (prefers-reduced-motion:reduce){.fincard,.fincard .fc,.gold-seal{animation:none}.room{transition:none}}
 .sum .stat .of{margin-left:0;font:800 26px/1.1 var(--f-num);color:var(--accent)}
 .sum.alldone .stat .of{color:var(--done)}
+@media (prefers-color-scheme:dark){.room .dt{color:#0B2A24}.stat.due span,.stat.dirty span{color:var(--ink)}}
