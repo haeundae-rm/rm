@@ -3,7 +3,7 @@
 import * as S from './store.js';
 import { setupMyWork } from './mywork.js';
 
-const APP_VER = '2026.11.05-5';
+const APP_VER = '2026.11.06-1';
 // 관리자 = 보안 규칙 isAdmin 과 같은 목록 (UID 는 공개돼도 되는 값)
 const ADMINS = [
   { uid: 'iw2orXgIgPgTbLUQa0b41XJ9Dvd2', label: '소장', email: 'unieshaeundae+admin@gmail.com' },
@@ -259,6 +259,12 @@ function offline() { return !navigator.onLine || (dayCache && cacheSince && Date
 // 화면
 // =====================================================================
 const vibe = ms => { try { if (navigator.vibrate) navigator.vibrate(ms); } catch (e) {} };
+const IC = {
+  clock: '<svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>',
+  bed: '<svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 18V8M3 14h18v4M21 14v-2a3 3 0 0 0-3-3h-7v5"/><circle cx="7" cy="11" r="2"/></svg>',
+  snd: '<svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9v6h4l5 4V5L8 9H4z"/><path d="M16.5 8.5a5 5 0 0 1 0 7M19 6a8.5 8.5 0 0 1 0 12"/></svg>',
+  mute: '<svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9v6h4l5 4V5L8 9H4z"/><path d="M17 9l5 6M22 9l-5 6"/></svg>'
+};
 function toast(msg) { const o = document.querySelector('.toast'); if (o) o.remove(); const t = document.createElement('div'); t.className = 'toast'; t.textContent = msg; document.body.appendChild(t); setTimeout(() => t.remove(), 2700); }
 function confetti() {
   const box = document.createElement('div'); box.className = 'confetti';
@@ -266,6 +272,15 @@ function confetti() {
   for (let i = 0; i < 36; i++) { const p = document.createElement('i'); p.style.left = Math.random() * 100 + '%'; p.style.background = cols[i % cols.length]; p.style.animationDelay = (Math.random() * .5) + 's'; p.style.animationDuration = (1.3 + Math.random() * .8) + 's'; box.appendChild(p); }
   document.body.appendChild(box); setTimeout(() => box.remove(), 2800);
   setTimeout(() => play('fin'), 300);
+}
+function finCard(m, t) {
+  const o = document.querySelector('.fincard'); if (o) o.remove();
+  const box = document.createElement('div'); box.className = 'fincard'; box.setAttribute('role', 'status');
+  const md = today.slice(5).replace('-', '.');
+  box.innerHTML = '<div class="fc"><span class="gold-seal"><i>' + md + '</i><b>오늘 끝</b></span><span class="fn">' + t + '실</span><b class="ft">오늘 정비 끝!</b><span class="fs">' + esc(m.name) + ' 님, 정말 수고하셨어요. 푹 쉬세요.</span><button class="big" data-fin-x="1">닫기</button></div>';
+  const close = () => { box.classList.add('out'); setTimeout(() => box.remove(), 260); };
+  box.addEventListener('click', close);
+  document.body.appendChild(box); setTimeout(close, 5200);
 }
 let note = '', noteUntil = 0;
 function say(msg) { note = msg; noteUntil = Date.now() + 8000; drawSync(); }
@@ -295,6 +310,7 @@ function render() {
   if (!data) compute();   // 화면이 꺼져 있으면 휴대폰이 그리기 예약(requestAnimationFrame)을 미뤄서, 30초 시계가 계산보다 먼저 올 수 있음 (11/5 오류 기록)
   $('#date').textContent = data.label;
   const y = window.scrollY;
+  document.body.classList.toggle('adm', !!isAdm);
   if (isAdm) {
     $('#bar').innerHTML = '<div class="mebar"><span class="mechip">관리자 · ' + esc((ADMINS.filter(a => a.uid === user.uid)[0] || {}).label || '') + '</span>' + noticeBtn(null) + sndBtn() + '</div>';
     if (viewMaid && maidOf(viewMaid)) renderMaid(maidOf(viewMaid), true); else { viewMaid = null; renderAdmin(); }
@@ -329,7 +345,7 @@ function addMin(t, n) { const p = t.split(':'), v = Number(p[0]) * 60 + Number(p
 function timeLine(x, done) {
   if (!x.due && !x.after) return '';
   const txt = x.due && x.after ? hmK(x.after) + '~' + hmK(x.due) + ' 사이 정비' : x.due ? hmK(x.due) + '까지 우선정비' : hmK(x.after) + ' 이후 정비';
-  return '<span class="tl' + (done ? ' off' : '') + '">⏰ ' + txt + '</span>';
+  return '<span class="tl' + (done ? ' off' : '') + '">' + IC.clock + txt + '</span>';
 }
 function leftChip(x) {
   if (!x.due) return '';
@@ -351,7 +367,7 @@ function roomCard(m, x) {
   if (pop) justDone[key] = 2;
   const seal = r ? '<span class="seal"><i>CHECK</i><b>정비완료</b>' + (isAdm ? '<span>' + hm(r.at) + '</span>' : '<span class="ck">✔</span>') + '</span>' : '';
   return '<button class="room' + cls + pri + hot + (pop ? ' pop' : '') + '" data-room="' + esc(x.room) + '"><span class="no">' + esc(x.room) + '</span><span class="mid">' +
-    (!r && isDirty(x.room) ? '<span class="dt">🛏 더티 완료</span>' : '') + timeLine(x, !!r) + (tagsHtml(x) ? '<span class="tags">' + tagsHtml(x) + '</span>' : '') +
+    (!r && isDirty(x.room) ? '<span class="dt">' + IC.bed + '더티 완료</span>' : '') + timeLine(x, !!r) + (tagsHtml(x) ? '<span class="tags">' + tagsHtml(x) + '</span>' : '') +
     (nt ? '<span class="nt">' + esc(nt) + '</span>' : '') + (mm ? '<span class="mm">메모 · ' + esc(mm) + '</span>' : '') +
     (x.from ? '<span class="sw">↔ ' + esc(x.from) + ' 님과 교환한 객실</span>' : '') +
     (r && r.memo ? '<span class="memo-mk">✎ 내 메모 있음</span>' : '') +
@@ -372,14 +388,18 @@ function renderMaid(m, asAdmin) {
   const dirtyLeft = m.rooms.filter(x => isDirty(x.room) && !recOf(m.name, x.room));
   let html = asAdmin ? '' : bands() + instHtml() + ventHtml() + swapBanner(m);
   html += asAdmin ? '<div class="amode"><button class="ghost back" data-back="1">← 전체 현황</button><span>' + esc(m.name) + ' 님 화면 (객실을 누르면 대신 처리)</span></div>' : '';
-  html += '<section class="sum' + (allDone ? ' alldone' : '') + '"><div class="who"><b>' + esc(m.name) + '</b> 님 · ' + esc(m.floors) + '</div>' +
-    '<div class="left">' + (allDone ? '<span class="n">오늘 정비 끝! 🎉</span><span class="u">수고하셨어요</span>' : '<span class="u">남은 객실</span><span class="n' + (bump ? ' bump' : '') + '">' + rem + '</span><span class="u">실</span>') +
-    '<span class="of">완료 ' + d + ' / ' + t + '</span></div><div class="meter"><i style="width:' + (t ? d / t * 100 : 0) + '%"></i></div>' +
-    (rem === 0 && t > 0 && myPend ? '<div class="saving">⏳ 마지막 기록을 저장하는 중이에요…</div>' : '') +
-    (dueLeft.length ? '<div class="alert">⏰ 시간 정해진 객실 ' + dueLeft.length + '실 남음 · ' + dueLeft.map(x => '<button class="jump" data-jump="' + esc(x.room) + '">' + esc(x.room) + ' (' + hmK(x.due) + ')</button>').join(' ') + '</div>' : '') +
-    (dirtyLeft.length ? '<div class="dirtyline">🛏 더티 끝난 방 ' + dirtyLeft.length + '실 · ' + dirtyLeft.map(x => '<button class="jump" data-jump="' + esc(x.room) + '">' + esc(x.room) + '</button>').join(' ') + '</div>' : '') +
+  const tile = (cls, n, lbl, jump) => (jump ? '<button class="stat ' + cls + '" data-jump="' + esc(jump) + '">' : '<div class="stat ' + cls + '">') + '<b>' + n + '</b><span>' + lbl + '</span>' + (jump ? '</button>' : '</div>');
+  html += '<section class="sum' + (allDone ? ' alldone' : '') + '"><div class="who">' + esc(m.floors) + ' · 오늘 객실 ' + t + '실</div>' +
+    '<div class="greet">' + esc(m.name) + ' 님, ' + (allDone ? '<em>오늘 정비 끝!</em>' : '남은 객실 <em class="n' + (bump ? ' bump' : '') + '">' + rem + '</em>실') + '</div>' +
+    '<div class="stats"><div class="stat done"><b class="of" aria-label="완료 ' + d + ' / ' + t + '">' + d + '<small> / ' + t + '</small></b><span>완료</span></div>' +
+    tile('due' + (dueLeft.length ? '' : ' zero'), dueLeft.length, '시간 정해짐', dueLeft.length ? dueLeft[0].room : '') +
+    tile('dirty' + (dirtyLeft.length ? '' : ' zero'), dirtyLeft.length, '더티 끝남', dirtyLeft.length ? dirtyLeft[0].room : '') + '</div>' +
+    '<div class="meter"><i style="width:' + (t ? d / t * 100 : 0) + '%"></i></div>' +
+    (rem === 0 && t > 0 && myPend ? '<div class="saving">마지막 기록을 저장하는 중이에요…</div>' : '') +
+    (dueLeft.length ? '<div class="alert">' + IC.clock + '<span>시간 정해진 객실 ' + dueLeft.length + '실 남음 · ' + dueLeft.map(x => '<button class="jump" data-jump="' + esc(x.room) + '">' + esc(x.room) + ' (' + hmK(x.due) + ')</button>').join(' ') + '</span></div>' : '') +
+    (dirtyLeft.length ? '<div class="dirtyline">' + IC.bed + '<span>더티 끝난 방 ' + dirtyLeft.length + '실 · ' + dirtyLeft.map(x => '<button class="jump" data-jump="' + esc(x.room) + '">' + esc(x.room) + '</button>').join(' ') + '</span></div>' : '') +
     '</section>';
-  html += '<p class="sec">오늘 객실</p>' + sortRooms(m).map(x => roomCard(m, x)).join('');
+  html += '<p class="sec">오늘 객실 · 번호 순</p>' + sortRooms(m).map(x => roomCard(m, x)).join('');
   html += '<button class="addbtn" data-addroom="1">+ 객실 추가</button>';
   if ((m.removed || []).length) html += '<p class="sec">정비 제외된 객실</p>' + m.removed.map(x => {
     const self = x.removedBy === '본인';
@@ -397,10 +417,10 @@ function cheer(m, d, t, rem, bump, myPend) {
   if (rem !== 0) delete finArmed[k];
   if (finArmed[k] && !myPend) {
     delete finArmed[k];
-    if (!shown['fin' + k] && lsGet('rm_fin_' + k) !== '1') { shown['fin' + k] = 1; lsSet('rm_fin_' + k, '1'); confetti(); toast('오늘 정비 끝! 수고하셨어요 🎉'); }
+    if (!shown['fin' + k] && lsGet('rm_fin_' + k) !== '1') { shown['fin' + k] = 1; lsSet('rm_fin_' + k, '1'); confetti(); finCard(m, t); }
     return;
   }
-  if (bump && rem > 0 && t >= 4 && d * 2 >= t && !shown['half' + k] && lsGet('rm_half_' + k) !== '1') { shown['half' + k] = 1; lsSet('rm_half_' + k, '1'); toast('절반 왔어요! 👍'); setTimeout(() => play('half'), 350); }
+  if (bump && rem > 0 && t >= 4 && d * 2 >= t && !shown['half' + k] && lsGet('rm_half_' + k) !== '1') { shown['half' + k] = 1; lsSet('rm_half_' + k, '1'); toast('절반 왔어요! 힘내세요'); setTimeout(() => play('half'), 350); }
 }
 // 교환 알림: 내가 직접 한 교환은 빼고, '확인' 누른 교환은 다시 안 보임 (휴대폰에 기억)
 function swapKey() { return 'rm2_swapseen_' + today + '_' + (me || ''); }
@@ -499,7 +519,7 @@ function renderAdmin() {
   }));
   dueRows.sort((a, b) => (a.x.due < b.x.due ? -1 : a.x.due > b.x.due ? 1 : Number(a.x.room) - Number(b.x.room)));
   const now = nowHM(), nts = data.notices || [];
-  let html = bands() + '<div class="amode"><b>관리자 모드</b><span class="trial">새 앱 시험</span><span>메이드를 누르면 그 화면을 볼 수 있어요.</span>' +
+  let html = bands() + '<div class="amode"><b>관리자 모드</b><span>메이드를 누르면 그 화면을 볼 수 있어요.</span>' +
     '<a class="ghost" href="' + OLD_APP + '" target="_blank" rel="noopener">📢 공지 · 📋 연차 관리 (기존 앱)</a><button class="ghost" data-admin-off="1">관리자 모드 끄기</button></div>' +
     '<div>' + relayLine() + '</div>' + cmpLine() +
     (data.noPlan ? '<div class="alert" style="margin-top:0">⚠ 오늘 배정이 아직 앱에 없어요. 아래 <b>정비보고서 올리기</b>로 올리면 1~2분 안에 들어와요.</div>' : '') + upCard() +
@@ -508,7 +528,7 @@ function renderAdmin() {
     const d = doneCount(m), t = totalUnits(m), ic = m.rooms.filter(x => { const r = recOf(m.name, x.room); return r && r.memo; }).length;
     return '<button class="mg' + (d === t ? ' full' : '') + '" data-view="' + esc(m.name) + '"><b>' + esc(m.name) + '</b><div class="bar"><i style="width:' + (t ? d / t * 100 : 0) + '%"></i></div><small>' + d + '/' + t + (ic ? ' · 메모 ' + ic : '') + '</small></button>';
   }).join('') + '</div>';
-  html += '<div class="card"><h3>⏰ 시간 정해진 객실 (미완료)</h3><div class="list">' + (dueRows.length ? dueRows.map(o => {
+  html += '<div class="card"><h3>' + IC.clock + '시간 정해진 객실 (미완료)</h3><div class="list">' + (dueRows.length ? dueRows.map(o => {
     const late = o.x.due <= now;
     return '<div class="r' + (late || o.x.due <= addMin(now, 60) ? ' hot' : '') + '"><span><b>' + esc(o.x.room) + '</b> · ' + esc(o.m.name) + '</span><span>' + esc(o.x.due) + '까지' + (late ? ' · 지남' : '') + '</span></div>';
   }).join('') : '<div class="r"><span>모두 끝났어요.</span><span></span></div>') + '</div></div>';
@@ -721,7 +741,7 @@ const SND = {
   fin: () => { [523, 659, 784].forEach((f, i) => tone(f, i * 0.09, 0.14, 'square', 0.06)); tone(1047, 0.3, 0.6, 'square', 0.07); tone(784, 0.3, 0.6, 'triangle', 0.08); thump(0.3, 0.3); }
 };
 function play(k) { if (!soundOn()) return; try { SND[k](); } catch (e) {} }
-function sndBtn() { const on = soundOn(); return '<button class="snd-btn" data-snd="1" aria-pressed="' + on + '" aria-label="' + (on ? '소리 끄기' : '소리 켜기') + '">' + (on ? '🔊' : '🔇') + '</button>'; }
+function sndBtn() { const on = soundOn(); return '<button class="snd-btn" data-snd="1" aria-pressed="' + on + '" aria-label="' + (on ? '소리 끄기' : '소리 켜기') + '">' + (on ? IC.snd : IC.mute) + '</button>'; }
 document.addEventListener('touchstart', () => { if (soundOn()) A(); }, { passive: true, once: true });
 
 // =====================================================================
