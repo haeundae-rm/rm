@@ -30,7 +30,7 @@ export function setupMyWork(ctx) {
     const bar = document.querySelector('#bar .mebar');
     if (!bar || !me() || ctx.isAdm()) return;
     let b = bar.querySelector('.mw-btn');
-    if (!b) { bar.insertAdjacentHTML('beforeend', '<button class="mw-btn" data-mw="open">📅 내 근무</button>'); b = bar.querySelector('.mw-btn'); }
+    if (!b) { bar.insertAdjacentHTML('beforeend', '<button class="mw-btn" data-mw="open">내 근무</button>'); b = bar.querySelector('.mw-btn'); }
     const dot = news > Number(lsGet(seenKey()) || 0), has = !!b.querySelector('.dot');
     if (dot && !has) b.insertAdjacentHTML('beforeend', '<span class="dot" aria-label="연차 신청 결과가 나왔어요"></span>');
     if (!dot && has) b.querySelector('.dot').remove();

@@ -8,13 +8,14 @@
   --t-due:#10233F; --t-ext:#8D7B6A; --t-room:#117A75; --t-royal:#5B4FCF; --t-set:#6B7785; --t-care:#8A4B12;
   --stamp:#1B3A6B; --warn-red:#C62828;
 }
-@media (prefers-color-scheme:dark){:root{
+@media (rm-light-only){:root{
   --bg:#0E141C; --surface:#17202B; --ink:#E8EDF3; --muted:#9AA7B6; --line:#2A3644;
   --done:#5CC28A; --done-soft:#173326; --issue:#F07A88; --issue-soft:#3A1D23; --navy:#0A1830; --warn:#F07A88; --accent:#7FB0E8;
   --t-vip:#34A853; --t-grp:#EA4335; --t-stay:#F28B30; --t-pink:#E85AA5; --t-theme:#F4C20D; --t-duty:#5BC0F0;
   --t-due:#C9D6E8; --t-ext:#B8A898; --t-room:#5CC9C2; --t-royal:#9A90F0; --t-set:#9AA7B6; --t-care:#E0A060;
   --stamp:#6F9BE0; --warn-red:#FF6B6B; color-scheme:dark}}
 *{box-sizing:border-box}
+:root{color-scheme:light}  /* 휴대폰 다크 모드와 관계없이 항상 밝은 화면 */
 html,body{margin:0}
 body{background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:16px;line-height:1.45}
 button{font-family:inherit}
@@ -330,3 +331,139 @@ main{padding:16px 16px 56px;max-width:760px;margin:0 auto;display:flex;flex-dire
 .upsum details{margin-top:6px;font-size:14px}
 .upsum summary{cursor:pointer;color:var(--muted)}
 .upcard .upbtn{background:var(--navy);color:#fff;border:0;cursor:pointer}
+
+/* =====================================================================
+   디자인 A+ (2026-11-06) — A 클린 화이트 + 인사·숫자 칸 + 금색은 '오늘 끝'에만
+   원칙: 버튼 위치·누르는 방법 그대로, 움직임 2초 안, 화면 막지 않기, 움직임 줄이기 존중
+   ===================================================================== */
+:root{
+  --bg:#F4F6F9; --surface:#FFFFFF; --ink:#111827; --muted:#4B5563; --line:#E5E8EE;
+  --navy:#1D3A6E; --accent:#1D3A6E; --done:#1E8E3E; --done-soft:#F5FBF7; --stamp:#1E8E3E;
+  --warn-red:#B42318; --red-soft:#FDECEC; --teal:#0F6B5C; --teal-soft:#E7F5F2; --tile:#F2F5FA;
+  --gold:#A77A1E; --gold-line:#C79A3B; --shadow:0 2px 10px rgba(17,24,39,.06);
+  --f-num:"Inter","Noto Sans KR",system-ui,sans-serif;
+}
+@media (rm-light-only){:root{
+  --bg:#0E141C; --surface:#17202B; --ink:#E8EDF3; --muted:#A3AFBD; --line:#2A3644;
+  --navy:#0F2342; --accent:#8FB6EC; --done:#5CC28A; --done-soft:#14281D; --stamp:#5CC28A;
+  --warn-red:#FF8A80; --red-soft:#3A1D20; --teal:#4FC3B0; --teal-soft:#12302B; --tile:#1E2936;
+  --gold:#E3BE6A; --gold-line:#C79A3B; --shadow:none}}
+body{font-variant-numeric:tabular-nums}
+.ic{width:1.05em;height:1.05em;flex:0 0 auto;fill:none;stroke:currentColor;stroke-width:2.3;stroke-linecap:round;stroke-linejoin:round;vertical-align:-.15em}
+
+/* 머리: 메이드는 흰 바탕, 관리자는 남색 (휴대폰 맨 위 상태줄 칸은 남색으로 남겨 시계 글씨가 보이게) */
+.top{background:linear-gradient(var(--navy) 0 env(safe-area-inset-top),var(--surface) 0);color:var(--ink);border-bottom:1px solid var(--line);padding-bottom:12px}
+.top h1{font-size:14px;font-weight:700;color:var(--accent)}
+.top .date{color:var(--muted);opacity:1}
+.mechip{background:var(--tile);color:var(--ink)}
+.tbtn{border:0;background:var(--tile);color:var(--accent)}
+.tbtn .dot{border-color:var(--surface)}
+.snd-btn{border:0;background:var(--tile);color:var(--muted)}
+.snd-btn .ic{width:20px;height:20px}
+.sync{color:var(--muted);opacity:1}
+.mw-btn{background:var(--tile);color:var(--accent);border:1.5px solid color-mix(in srgb,var(--accent) 25%,transparent)}
+.mw-btn .dot{border-color:var(--surface)}
+body.adm .top{background:var(--navy);color:#fff;border-bottom:0}
+body.adm .top h1,body.adm .top .date,body.adm .sync{color:#fff}
+body.adm .top .date,body.adm .sync{opacity:.8}
+body.adm .mechip{background:#fff;color:var(--navy)}
+body.adm .tbtn,body.adm .snd-btn{background:rgba(255,255,255,.14);color:#fff}
+
+/* 요약 → 인사 + 숫자 칸 3개 */
+.sum{border:0;border-left:0;border-radius:20px;padding:16px;box-shadow:var(--shadow);display:flex;flex-direction:column;gap:12px}
+.sum .who{font-size:14px;font-weight:500;color:var(--muted)}
+.greet{font-size:24px;font-weight:900;letter-spacing:-.4px;line-height:1.3}
+.greet em{font-style:normal;color:var(--accent)}
+.greet .n{font-family:var(--f-num);font-weight:800;display:inline-block}
+.sum.alldone{background:var(--surface)}
+.sum.alldone .greet em{color:var(--done)}
+.stats{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+.stat{border:0;border-radius:16px;padding:12px;display:flex;flex-direction:column;gap:2px;text-align:left;background:var(--tile);color:var(--ink);font:inherit;min-height:72px}
+button.stat{cursor:pointer;touch-action:manipulation}
+.stat b{font:800 26px/1.1 var(--f-num);color:var(--accent)}
+.stat b small{font-size:15px;color:var(--muted);font-weight:700}
+.stat span{font-size:12px;font-weight:700;color:var(--muted)}
+.stat.due{background:var(--red-soft)} .stat.due b{color:var(--warn-red)} .stat.due span{color:color-mix(in srgb,var(--warn-red) 80%,var(--ink))}
+.stat.dirty{background:var(--teal-soft)} .stat.dirty b{color:var(--teal)} .stat.dirty span{color:color-mix(in srgb,var(--teal) 80%,var(--ink))}
+.stat.zero{background:var(--tile)} .stat.zero b{color:var(--muted)} .stat.zero span{color:var(--muted)}
+.sum.alldone .stat.done b{color:var(--done)}
+.meter{margin-top:0}
+.meter>i{background:var(--done)}
+.sum .saving{margin:0;color:#7A5400}
+.alert{margin:0;display:flex;gap:8px;align-items:flex-start;background:var(--red-soft);color:var(--warn-red);border-radius:12px;font-size:14px}
+.alert .ic{margin-top:3px}
+.alert .jump{background:var(--surface);color:var(--warn-red);border:1.5px solid color-mix(in srgb,var(--warn-red) 35%,transparent)}
+body.adm main>.alert{background:var(--red-soft);color:var(--warn-red)}
+.sum .dirtyline{margin:0;display:flex;gap:8px;align-items:flex-start;background:var(--teal-soft);color:var(--teal);border-radius:12px;padding:8px 12px;font-size:14px}
+.sum .dirtyline .ic{margin-top:3px}
+.sum .dirtyline .jump{background:var(--surface);border-color:color-mix(in srgb,var(--teal) 45%,transparent);color:var(--teal)}
+
+/* 객실 카드 */
+.sec{color:var(--muted);font-weight:700;margin:6px 4px -2px}
+.room{border:0;border-radius:18px;padding:16px 18px;box-shadow:var(--shadow);gap:14px;outline:0 solid transparent;transition:transform .12s ease}
+.room:active{transform:scale(.985)}
+.room .no{font:800 30px/1 var(--f-num);min-width:84px;letter-spacing:-.5px}
+.room .tl{display:inline-flex;align-items:center;gap:6px;font-size:15px;font-weight:700}
+.room .tl.off{display:inline-flex}
+.room .nt{font-weight:500}
+.room.pri{box-shadow:var(--shadow);outline:2px solid color-mix(in srgb,var(--warn-red) 35%,transparent);outline-offset:-2px;border-color:transparent}
+.room.duehot{outline:2px solid var(--warn-red);outline-offset:-2px;box-shadow:var(--shadow)}
+.room .st .left{background:var(--warn-red);color:#fff;border:0;border-radius:10px;padding:6px 8px;font-size:13px}
+.room .st .left.late{background:#7A1A12}
+.room.dirty{box-shadow:var(--shadow)}
+.room .dt{background:var(--teal);font-size:13px;font-weight:700;gap:6px;padding:4px 11px}
+.room.done{background:var(--done-soft);outline:1.5px solid color-mix(in srgb,var(--done) 45%,transparent);outline-offset:-1.5px;box-shadow:none;min-height:96px}
+.room.done .no{color:var(--done)}
+.seal{border-width:4px;width:72px;height:72px;margin-top:-36px;box-shadow:none;background:transparent;transform:rotate(-14deg)}
+.seal b{font-size:13px}
+.room.issue{background:var(--red-soft);outline:1.5px solid var(--warn-red);outline-offset:-1.5px}
+.room.off{box-shadow:none;outline:1.5px dashed var(--line);outline-offset:-1.5px}
+.room .pend{background:#FFF1C9}
+.addbtn{border-color:#C9D0DA;border-radius:16px;color:var(--accent)}
+.notice,.pick,.card,.vent,.inst,.swapban{border-color:transparent;box-shadow:var(--shadow);border-radius:18px}
+.vent,.swapban{border-color:color-mix(in srgb,var(--t-room) 35%,transparent)}
+.names button{background:var(--surface);border:1.5px solid var(--line);border-radius:14px}
+/* 잉크 도장: 크게 떨어져서 '쿵' — 0.45초 */
+@keyframes sealIn{0%{transform:translateY(-26px) scale(1.8) rotate(-30deg);opacity:0;filter:blur(1.5px)}55%{transform:scale(.92) rotate(-12deg);opacity:1;filter:none}75%{transform:scale(1.04) rotate(-15deg)}100%{transform:scale(1) rotate(-14deg)}}
+
+/* 창 */
+.panel{border-radius:24px 24px 0 0}
+.panel .rno{font:800 30px var(--f-num)}
+.big{background:var(--done);border-radius:16px}
+.acts .go{background:var(--navy);border-color:var(--navy)}
+.chk .it{border-radius:14px}
+
+/* 관리자 화면 */
+.kpi{border:0;border-radius:16px;box-shadow:var(--shadow)}
+.kpi b{font:800 24px var(--f-num)}
+.kpi:nth-child(1){background:var(--navy);color:#fff} .kpi:nth-child(1) span,.kpi:nth-child(1) small{color:rgba(255,255,255,.85)}
+.kpi:nth-child(2) b{color:var(--warn-red)}
+.mg{border:0;border-radius:16px;box-shadow:var(--shadow);padding:12px 14px}
+.mg b{font-size:16px;font-weight:900}
+.mg .bar i{background:var(--navy)}
+.mg.full{background:var(--done-soft);outline:1.5px solid color-mix(in srgb,var(--done) 45%,transparent);outline-offset:-1.5px;box-shadow:none}
+.mg.full b{color:var(--done)} .mg.full .bar i{background:var(--done)}
+.mg.hasissue{outline:1.5px solid var(--warn-red);outline-offset:-1.5px}
+.card h3{display:flex;align-items:center;gap:6px}
+.card h3 .ic{color:var(--warn-red)}
+.list .r.hot span:last-child{color:var(--warn-red)}
+@media (rm-light-only){.kpi:nth-child(1){background:#24406F}}
+
+/* 오늘 끝 카드 (금색은 여기만) — 누르면 닫힘, 5초 뒤 저절로 */
+.fincard{position:fixed;inset:0;z-index:38;display:flex;align-items:center;justify-content:center;padding:24px;background:rgba(17,24,39,.28);animation:fcIn .25s ease-out}
+.fincard.out{opacity:0;transition:opacity .25s}
+.fincard .fc{width:100%;max-width:330px;background:var(--surface);border-radius:28px;padding:28px 24px 22px;box-shadow:0 24px 60px rgba(17,24,39,.3);display:flex;flex-direction:column;align-items:center;gap:8px;text-align:center;animation:fcPop .5s cubic-bezier(.25,1.4,.45,1)}
+.gold-seal{width:96px;height:96px;border-radius:50%;border:5px solid var(--gold-line);outline:1.5px solid var(--gold-line);outline-offset:-12px;color:var(--gold);display:flex;flex-direction:column;align-items:center;justify-content:center;transform:rotate(-10deg);line-height:1.15;animation:sealIn .5s .15s cubic-bezier(.25,1.4,.45,1) both}
+.gold-seal i{font:800 10px var(--f-num);font-style:normal;letter-spacing:2px}
+.gold-seal b{font-size:20px;font-weight:900}
+.fincard .fn{font:800 44px/1.1 var(--f-num);color:var(--done);margin-top:6px}
+.fincard .ft{font-size:22px;font-weight:900}
+.fincard .fs{font-size:14px;color:var(--muted)}
+.fincard .big{width:100%;margin-top:10px;min-height:52px;background:var(--navy)}
+@keyframes fcIn{from{opacity:0}to{opacity:1}}
+@keyframes fcPop{0%{transform:translateY(16px) scale(.94);opacity:0}100%{transform:none;opacity:1}}
+.toast{background:var(--navy)}
+@media (prefers-reduced-motion:reduce){.fincard,.fincard .fc,.gold-seal{animation:none}.room{transition:none}}
+.sum .stat .of{margin-left:0;font:800 26px/1.1 var(--f-num);color:var(--accent)}
+.sum.alldone .stat .of{color:var(--done)}
+@media (rm-light-only){.room .dt{color:#0B2A24}.stat.due span,.stat.dirty span{color:var(--ink)}}
