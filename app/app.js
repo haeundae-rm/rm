@@ -3,7 +3,7 @@
 import * as S from './store.js';
 import { setupMyWork } from './mywork.js';
 
-const APP_VER = '2026.11.06-5';
+const APP_VER = '2026.11.06-6';
 // 관리자 = 보안 규칙 isAdmin 과 같은 목록 (UID 는 공개돼도 되는 값)
 const ADMINS = [
   { uid: 'iw2orXgIgPgTbLUQa0b41XJ9Dvd2', label: '소장', email: 'unieshaeundae+admin@gmail.com' },
@@ -312,6 +312,9 @@ function render() {
   $('#date').textContent = data.label;
   const y = window.scrollY;
   document.body.classList.toggle('adm', !!isAdm);
+  { const h = document.querySelector('.top h1'), t = isAdm ? '객실 통합 관리 시스템' : '룸메이드 정비 레포트';   // 관리자 화면만 시스템 이름 (메이드 화면은 그대로)
+    if (h && h.textContent !== t) h.textContent = t;
+    const dt = isAdm ? '객실 통합 관리 시스템' : '정비 레포트'; if (document.title !== dt) document.title = dt; }
   if (isAdm) {
     $('#bar').innerHTML = '<div class="mebar"><span class="mechip">관리자 · ' + esc((ADMINS.filter(a => a.uid === user.uid)[0] || {}).label || '') + '</span>' + noticeBtn(null) + sndBtn() + '</div>';
     if (viewMaid && maidOf(viewMaid)) renderMaid(maidOf(viewMaid), true); else { viewMaid = null; renderAdmin(); }
