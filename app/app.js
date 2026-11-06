@@ -3,7 +3,7 @@
 import * as S from './store.js';
 import { setupMyWork } from './mywork.js';
 
-const APP_VER = '2026.11.06-1';
+const APP_VER = '2026.11.06-2';
 // 관리자 = 보안 규칙 isAdmin 과 같은 목록 (UID 는 공개돼도 되는 값)
 const ADMINS = [
   { uid: 'iw2orXgIgPgTbLUQa0b41XJ9Dvd2', label: '소장', email: 'unieshaeundae+admin@gmail.com' },
@@ -263,6 +263,7 @@ const IC = {
   clock: '<svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>',
   bed: '<svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 18V8M3 14h18v4M21 14v-2a3 3 0 0 0-3-3h-7v5"/><circle cx="7" cy="11" r="2"/></svg>',
   snd: '<svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9v6h4l5 4V5L8 9H4z"/><path d="M16.5 8.5a5 5 0 0 1 0 7M19 6a8.5 8.5 0 0 1 0 12"/></svg>',
+  check: '<svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 11l3 3 8-8"/><path d="M20 12v6a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h9"/></svg>',
   mute: '<svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9v6h4l5 4V5L8 9H4z"/><path d="M17 9l5 6M22 9l-5 6"/></svg>'
 };
 function toast(msg) { const o = document.querySelector('.toast'); if (o) o.remove(); const t = document.createElement('div'); t.className = 'toast'; t.textContent = msg; document.body.appendChild(t); setTimeout(() => t.remove(), 2700); }
@@ -510,6 +511,72 @@ function upSend(d0) {
     .then(() => { busy = false; dlg = null; drawDlg(); say(d0.date.slice(5).replace('-', '/') + ' 배정표를 올렸어요. 1~2분 안에 메이드 휴대폰에 들어가요.'); })
     .catch(failDlg);
 }
+// ---------- 마감 대조 (2026-11-06): 마감 무렵 정비보고서(오더테이커가 하루 동안 고친 것) ↔ 앱 최종 담당·완료 — 이 기기에서만, 아무것도 안 올림
+function verifyRows(rows, maids, recOfFn) {
+  const rep = {}, app = {}, done = {}, gone = {};
+  rows.forEach(r => { (rep[r[2]] = rep[r[2]] || []).push(r[1]); });
+  maids.forEach(m => {
+    m.rooms.forEach(x => { (app[x.room] = app[x.room] || []).push(m.name); });
+    (m.removed || []).forEach(x => { (gone[x.room] = gone[x.room] || []).push(m.name); });
+  });
+  Object.keys(recs).forEach(k => { const r = recs[k]; if (r.status === '완료' || r.status === '이상') (done[r.room] = done[r.room] || []).push(r.maid); });
+  const all = {}; [rep, app, done].forEach(o => Object.keys(o).forEach(k => { all[k] = 1; }));
+  const out = { ok: [], miss: [], diff: [], extra: [], only: [], total: Object.keys(rep).length };
+  const same = (a, b) => a.length === b.length && a.every(x => b.indexOf(x) >= 0);
+  Object.keys(all).sort((a, b) => Number(a) - Number(b)).forEach(room => {
+    const R = (rep[room] || []).filter((x, i, a) => a.indexOf(x) === i), D = (done[room] || []).filter((x, i, a) => a.indexOf(x) === i), A = app[room] || [];
+    const o = { room, rep: R, done: D, app: A, gone: gone[room] || [] };
+    if (R.length && !D.length) out.miss.push(o);          // 보고서엔 정비 대상인데 완료 체크가 없음 = 정비 누락 의심
+    else if (R.length && !same(R, D)) out.diff.push(o);   // 완료는 됐는데 담당이 다름 (교환·대신·공동 일부)
+    else if (R.length) out.ok.push(o);
+    else if (D.length) out.extra.push(o);                  // 보고서엔 없는데 앱에서 완료 = 취소된 방을 정비했거나 보고서 빠짐
+    else if (A.length) out.only.push(o);                   // 앱에만 남은 미완료 (보고서에선 빠진 방)
+  });
+  return out;
+}
+function vfCard() {
+  return '<div class="card vfcard"><h3>' + IC.check + '마감 대조</h3><p class="rec" style="margin:0 0 8px">정비가 끝날 무렵 <b>오더테이커 정비보고서</b>(.xlsx)를 고르면 앱의 담당·완료 체크와 객실마다 맞춰 봐요. 종이 레포트에 동그라미 치던 일이에요. 이 기기에서만 보고 아무것도 바꾸지 않아요.</p>' +
+    '<button class="go upbtn" data-verify="1">마감 정비보고서로 대조하기</button></div>';
+}
+function pickVerify() {
+  const inp = document.createElement('input');
+  inp.type = 'file'; inp.accept = '.xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'; inp.style.display = 'none';
+  inp.addEventListener('change', () => {
+    const f = inp.files && inp.files[0]; inp.remove(); if (!f) return;
+    dlg = { kind: 'verify', file: f.name, res: null, err: '' }; busy = true; drawDlg();
+    f.arrayBuffer().then(async buf => {
+      const d0 = dlg; if (!d0 || d0.kind !== 'verify') return;
+      try {
+        if (typeof DecompressionStream === 'undefined') throw new Error('이 브라우저는 엑셀 읽기를 지원하지 않아요. PC 크롬이나 최신 휴대폰에서 해 주세요.');
+        if (!engine) engine = await import(new URL('engine.js?v=' + APP_VER, import.meta.url).href);
+        const r = await engine.buildFromXlsx(buf, today);
+        d0.sheet = r.sheet; d0.at = Date.now(); d0.res = verifyRows(r.rows, data.maids, recOf);
+      } catch (e) { d0.err = String(e && e.message || e); report('마감 대조', d0.err); }
+      busy = false; if (dlg === d0) drawDlg();
+    }).catch(e => { busy = false; if (dlg) { dlg.err = '파일을 읽지 못했어요: ' + (e && e.message || e); drawDlg(); } });
+  });
+  document.body.appendChild(inp); inp.click();
+}
+function vfBody() {
+  const d0 = dlg, v = d0.res, nm = a => a.length ? a.map(esc).join('·') : '없음';
+  let b = '<h3>마감 대조 · 정비보고서 ↔ 앱</h3><p class="rec" style="margin:0">📄 ' + esc(d0.file) + (d0.sheet ? ' · ' + esc(d0.sheet) + '일 시트' : '') + (d0.at ? ' · ' + hm(d0.at) + ' 기준' : '') + '</p>';
+  if (busy && !v) return b + '<p class="rec">엑셀을 읽고 맞춰 보는 중…</p>';
+  if (d0.err) return b + '<p class="err">' + esc(d0.err) + '</p><div class="acts"><button data-x="1">닫기</button></div>';
+  if (!v) return b;
+  const bad = v.miss.length + v.diff.length + v.extra.length;
+  b += '<div class="vf-sum' + (bad ? ' bad' : '') + '"><b>' + (bad ? '확인 필요 ' + bad + '실' : '이상 없음') + '</b><span>보고서 정비 대상 ' + v.total + '실 · 일치 ' + v.ok.length + '실' + (v.miss.length ? ' · 미완료 ' + v.miss.length : '') + '</span></div>';
+  const sec = (cls, title, hint, list, line) => list.length ? '<div class="vf-sec ' + cls + '"><h4>' + title + ' <small>' + list.length + '실</small></h4><p class="hint">' + hint + '</p>' + list.map(o => '<div class="vf-r"><b>' + esc(o.room) + '</b><span>' + line(o) + '</span></div>').join('') + '</div>' : '';
+  b += sec('miss', '정비 완료 체크 없음', '보고서에는 정비 대상인데 앱에 완료가 없어요. 정비 누락인지 확인해 주세요.', v.miss,
+    o => '보고서 ' + nm(o.rep) + (o.app.length ? ' · 앱 담당 ' + nm(o.app) : o.gone.length ? ' · 앱에서 제외됨(' + nm(o.gone) + ')' : ' · 앱 담당 없음'));
+  b += sec('diff', '담당이 달라요', '완료는 됐지만 보고서 담당과 완료한 사람이 달라요. 교환·대신 처리였는지 확인해 주세요.', v.diff,
+    o => '보고서 ' + nm(o.rep) + ' → 완료 ' + nm(o.done));
+  b += sec('extra', '보고서에 없는 완료', '앱에서 완료했지만 마감 보고서에는 정비 대상이 아니에요. 취소된 방인지, 보고서 누락인지 확인해 주세요.', v.extra,
+    o => '완료 ' + nm(o.done));
+  b += sec('only', '앱에만 남은 객실 (참고)', '보고서에서 빠졌는데 앱 목록에 남아 있는 미완료 객실이에요. 대부분 취소된 방이라 문제 없어요.', v.only,
+    o => '앱 담당 ' + nm(o.app));
+  if (!bad) b += '<p class="rec">보고서의 모든 객실이 앱에서 담당 그대로 완료됐어요.</p>';
+  return b + '<div class="acts"><button data-x="1">닫기</button><button class="go" data-verify="1">다시 대조</button></div>';
+}
 function renderAdmin() {
   let all = 0, done = 0; const issues = [], dueRows = [];
   data.maids.forEach(m => m.rooms.forEach(x => {
@@ -522,7 +589,7 @@ function renderAdmin() {
   let html = bands() + '<div class="amode"><b>관리자 모드</b><span>메이드를 누르면 그 화면을 볼 수 있어요.</span>' +
     '<a class="ghost" href="' + OLD_APP + '" target="_blank" rel="noopener">📢 공지 · 📋 연차 관리 (기존 앱)</a><button class="ghost" data-admin-off="1">관리자 모드 끄기</button></div>' +
     '<div>' + relayLine() + '</div>' + cmpLine() +
-    (data.noPlan ? '<div class="alert" style="margin-top:0">⚠ 오늘 배정이 아직 앱에 없어요. 아래 <b>정비보고서 올리기</b>로 올리면 1~2분 안에 들어와요.</div>' : '') + upCard() +
+    (data.noPlan ? '<div class="alert" style="margin-top:0">⚠ 오늘 배정이 아직 앱에 없어요. 아래 <b>정비보고서 올리기</b>로 올리면 1~2분 안에 들어와요.</div>' : '') + upCard() + vfCard() +
     '<div class="kpis"><div class="kpi"><b>' + done + '<small style="font-size:14px">/' + all + '</small></b><span>완료 객실</span></div><div class="kpi"><b>' + dueRows.length + '</b><span>시간 정해진 미완료</span></div><div class="kpi"><b>' + issues.length + '</b><span>메모 남긴 객실</span></div></div>';
   html += '<p class="sec" style="margin-top:0">메이드별 진행 (' + data.maids.length + '명)</p><div class="mgrid">' + data.maids.map(m => {
     const d = doneCount(m), t = totalUnits(m), ic = m.rooms.filter(x => { const r = recOf(m.name, x.room); return r && r.memo; }).length;
@@ -808,6 +875,7 @@ function drawDlg() {
         (dw ? '<div class="warnbox"><b>실 수가 달라져요.</b> 로얄 객실(3001·3002·3101·3102)은 2실로 계산돼요.</div>' : '') +
         '<p class="hint">바꾸면 두 분 화면이 바로 바뀌고, ' + esc(pv.owner) + ' 님 화면에도 알림이 떠요. 시간·단체 표시는 객실을 따라가요.</p>' + errP() + btns('취소', '교환하기', true); }
   } else if (k === 'upload') body = upBody();
+  else if (k === 'verify') body = vfBody();
   else if (k === 'proxyask') body = '<h3>' + esc(dlg.maid) + ' 님 대신 처리할까요?</h3><p>' + esc(dlg.room) + '호 · 기록에 "관리자 대신"이 표시돼요.</p>' + btns('취소', '대신 처리', true);
   el.innerHTML = '<div class="scrim"' + (k === 'notice' && dlg.must ? '' : ' data-x="1"') + '><div class="' + cls + '">' + body + '</div></div>';
 }
@@ -853,6 +921,7 @@ document.addEventListener('click', e => {
   if (at('[data-admin-in]')) { dlg = { kind: 'login', who: 0, pw: '' }; drawDlg(); return; }
   if (at('[data-admin-off]')) { S.signOut(); return; }
   if (at('[data-upload]')) { pickXlsx(); return; }
+  if (at('[data-verify]')) { pickVerify(); return; }
   if (at('[data-release-all]')) { dlg = { kind: 'releaseall' }; drawDlg(); return; }
   const rl = at('[data-release]'); if (rl) { dlg = { kind: 'release', name: rl.getAttribute('data-release') }; drawDlg(); return; }
   const jp = at('[data-jump]'); if (jp) { const el = document.querySelector('[data-room="' + jp.getAttribute('data-jump') + '"]'); if (el) { el.scrollIntoView({ behavior: 'smooth', block: 'center' }); el.classList.remove('flash'); void el.offsetWidth; el.classList.add('flash'); } return; }

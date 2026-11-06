@@ -467,3 +467,17 @@ body.adm main>.alert{background:var(--red-soft);color:var(--warn-red)}
 .sum .stat .of{margin-left:0;font:800 26px/1.1 var(--f-num);color:var(--accent)}
 .sum.alldone .stat .of{color:var(--done)}
 @media (rm-light-only){.room .dt{color:#0B2A24}.stat.due span,.stat.dirty span{color:var(--ink)}}
+/* 마감 대조 (2026-11-06) */
+.vfcard h3 .ic{color:var(--done)}
+.vf-sum{display:flex;flex-direction:column;gap:2px;border-radius:16px;padding:14px 16px;background:var(--done-soft);outline:1.5px solid color-mix(in srgb,var(--done) 40%,transparent);outline-offset:-1.5px}
+.vf-sum b{font-size:22px;font-weight:900;color:var(--done)}
+.vf-sum span{font-size:14px;color:var(--muted)}
+.vf-sum.bad{background:var(--red-soft);outline-color:color-mix(in srgb,var(--warn-red) 40%,transparent)}
+.vf-sum.bad b{color:var(--warn-red)}
+.vf-sec h4{margin:4px 0 0;font-size:16px;font-weight:900;display:flex;align-items:baseline;gap:6px}
+.vf-sec h4 small{font:700 14px var(--f-num);color:var(--muted)}
+.vf-sec.miss h4{color:var(--warn-red)} .vf-sec.diff h4,.vf-sec.extra h4{color:#8A5A00}
+.vf-r{display:flex;gap:12px;align-items:baseline;padding:9px 12px;border-radius:12px;background:var(--bg);margin-top:6px;font-size:14px}
+.vf-r b{font:800 18px var(--f-num);min-width:52px}
+.vf-sec.miss .vf-r{background:var(--red-soft)}
+.vf-sec.only .vf-r{color:var(--muted)}
