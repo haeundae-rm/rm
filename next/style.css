@@ -8,13 +8,14 @@
   --t-due:#10233F; --t-ext:#8D7B6A; --t-room:#117A75; --t-royal:#5B4FCF; --t-set:#6B7785; --t-care:#8A4B12;
   --stamp:#1B3A6B; --warn-red:#C62828;
 }
-@media (prefers-color-scheme:dark){:root{
+@media (rm-light-only){:root{
   --bg:#0E141C; --surface:#17202B; --ink:#E8EDF3; --muted:#9AA7B6; --line:#2A3644;
   --done:#5CC28A; --done-soft:#173326; --issue:#F07A88; --issue-soft:#3A1D23; --navy:#0A1830; --warn:#F07A88; --accent:#7FB0E8;
   --t-vip:#34A853; --t-grp:#EA4335; --t-stay:#F28B30; --t-pink:#E85AA5; --t-theme:#F4C20D; --t-duty:#5BC0F0;
   --t-due:#C9D6E8; --t-ext:#B8A898; --t-room:#5CC9C2; --t-royal:#9A90F0; --t-set:#9AA7B6; --t-care:#E0A060;
   --stamp:#6F9BE0; --warn-red:#FF6B6B; color-scheme:dark}}
 *{box-sizing:border-box}
+:root{color-scheme:light}  /* 휴대폰 다크 모드와 관계없이 항상 밝은 화면 */
 html,body{margin:0}
 body{background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:16px;line-height:1.45}
 button{font-family:inherit}
@@ -342,7 +343,7 @@ main{padding:16px 16px 56px;max-width:760px;margin:0 auto;display:flex;flex-dire
   --gold:#A77A1E; --gold-line:#C79A3B; --shadow:0 2px 10px rgba(17,24,39,.06);
   --f-num:"Inter","Noto Sans KR",system-ui,sans-serif;
 }
-@media (prefers-color-scheme:dark){:root{
+@media (rm-light-only){:root{
   --bg:#0E141C; --surface:#17202B; --ink:#E8EDF3; --muted:#A3AFBD; --line:#2A3644;
   --navy:#0F2342; --accent:#8FB6EC; --done:#5CC28A; --done-soft:#14281D; --stamp:#5CC28A;
   --warn-red:#FF8A80; --red-soft:#3A1D20; --teal:#4FC3B0; --teal-soft:#12302B; --tile:#1E2936;
@@ -446,7 +447,7 @@ body.adm main>.alert{background:var(--red-soft);color:var(--warn-red)}
 .card h3{display:flex;align-items:center;gap:6px}
 .card h3 .ic{color:var(--warn-red)}
 .list .r.hot span:last-child{color:var(--warn-red)}
-@media (prefers-color-scheme:dark){.kpi:nth-child(1){background:#24406F}}
+@media (rm-light-only){.kpi:nth-child(1){background:#24406F}}
 
 /* 오늘 끝 카드 (금색은 여기만) — 누르면 닫힘, 5초 뒤 저절로 */
 .fincard{position:fixed;inset:0;z-index:38;display:flex;align-items:center;justify-content:center;padding:24px;background:rgba(17,24,39,.28);animation:fcIn .25s ease-out}
@@ -465,4 +466,4 @@ body.adm main>.alert{background:var(--red-soft);color:var(--warn-red)}
 @media (prefers-reduced-motion:reduce){.fincard,.fincard .fc,.gold-seal{animation:none}.room{transition:none}}
 .sum .stat .of{margin-left:0;font:800 26px/1.1 var(--f-num);color:var(--accent)}
 .sum.alldone .stat .of{color:var(--done)}
-@media (prefers-color-scheme:dark){.room .dt{color:#0B2A24}.stat.due span,.stat.dirty span{color:var(--ink)}}
+@media (rm-light-only){.room .dt{color:#0B2A24}.stat.due span,.stat.dirty span{color:var(--ink)}}
