@@ -3,7 +3,7 @@
 import * as S from './store.js';
 import { setupMyWork } from './mywork.js';
 
-const APP_VER = '2026.11.06-2';
+const APP_VER = '2026.11.06-3';
 // 관리자 = 보안 규칙 isAdmin 과 같은 목록 (UID 는 공개돼도 되는 값)
 const ADMINS = [
   { uid: 'iw2orXgIgPgTbLUQa0b41XJ9Dvd2', label: '소장', email: 'unieshaeundae+admin@gmail.com' },
