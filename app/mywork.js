@@ -3,16 +3,19 @@
 export function setupMyWork(ctx) {
   const { esc, lsGet, lsSet, toast, vibe } = ctx;
   const $ = s => document.querySelector(s);
-  let mw = null, mwBusy = false, news = 0, newsAsked = false;
+  let mw = null, mwBusy = false, news = {}, newsAsked = false;
+  // 2인 1조: 조 휴대폰에서 짝의 근무·연차도 [이름] 버튼으로 바꿔 봄 (각자 비밀번호 — 부부는 같게 정해도 됨). as = '' 이면 등록된 본인
+  let as = '';
   const WD = ['일', '월', '화', '수', '목', '금', '토'];
-  const me = () => ctx.me();
+  const me = () => as || ctx.me();
+  const people = () => { const m = ctx.me(), mt = ctx.mate ? ctx.mate() : ''; return mt ? (ctx.pair ? ctx.pair() : [m, mt]) : [m]; };
   const dlg = () => ctx.dlg();
   function tkKey() { return 'rm_mw_tok_' + (me() || ''); }
   function getTok() { const t = lsGet(tkKey()) || ''; const p = t.split('|'); return p.length === 3 && Number(p[1]) > Date.now() ? t : ''; }
   // 기존 앱의 mwRun 과 같은 모양 (fn, 인자, 성공, 실패) — 첫 인자(dev)는 서버가 로그인 표로 채움
   function mwRun(fn, args, ok, fail) {
     mwBusy = true;
-    ctx.call(fn, args).then(x => { mwBusy = false; ok(x); }).catch(e => {
+    ctx.call(fn, args, as).then(x => { mwBusy = false; ok(x); }).catch(e => {
       mwBusy = false;
       const m = String(e && e.message || e).replace(/^(Exception|Error):\s*/, '');
       if (m.indexOf('MWLOCK:') >= 0 && mw) { lsSet(tkKey(), null); mw.stage = 'pin'; mw.step = 'enter'; mw.err = ''; mwDraw(); focusPin(); return; }
@@ -20,41 +23,43 @@ export function setupMyWork(ctx) {
     });
   }
   // ---------- 버튼 (정비 화면이 다시 그려질 때마다 app.js 가 부름)
-  function seenKey() { return 'rm_lv_seen_' + (me() || ''); }
+  function seenKey(n) { return 'rm_lv_seen_' + (n || me() || ''); }
   function askNews(force) {
-    if (!me() || ctx.isAdm() || (newsAsked && !force)) return;
+    if (!ctx.me() || ctx.isAdm() || (newsAsked && !force)) return;
     newsAsked = true;
-    ctx.call('myLeaveNews', []).then(r => { news = r && r.last || 0; inject(); }).catch(() => {});
+    people().forEach(n => ctx.call('myLeaveNews', [], n === ctx.me() ? '' : n).then(r => { news[n] = r && r.last || 0; inject(); }).catch(() => {}));
   }
   function inject() {
     const bar = document.querySelector('#bar .mebar');
-    if (!bar || !me() || ctx.isAdm()) return;
+    if (!bar || !ctx.me() || ctx.isAdm()) return;
     let b = bar.querySelector('.mw-btn');
     if (!b) { bar.insertAdjacentHTML('beforeend', '<button class="mw-btn" data-mw="open">내 근무</button>'); b = bar.querySelector('.mw-btn'); }
-    const dot = news > Number(lsGet(seenKey()) || 0), has = !!b.querySelector('.dot');
+    const dot = people().some(n => (news[n] || 0) > Number(lsGet(seenKey(n)) || 0)), has = !!b.querySelector('.dot');
     if (dot && !has) b.insertAdjacentHTML('beforeend', '<span class="dot" aria-label="연차 신청 결과가 나왔어요"></span>');
     if (!dot && has) b.querySelector('.dot').remove();
     askNews(false);
   }
   // ---------- 열기·닫기
-  function open() {
-    if (!me()) return;
+  function open(who) {
+    if (!ctx.me()) return;
+    if (who !== undefined) as = who === ctx.me() ? '' : who; else if (people().indexOf(as) < 0) as = '';
     ctx.setDlg({ kind: 'mywork' }); mw = { stage: 'load', ym: '', err: '' }; mwDraw();
     mwRun('myWorkHello', [], h => {
+      if (as && h && h.me && h.me !== as) { mw.stage = 'msg'; mw.err = as + ' 님 근무는 아직 볼 수 없어요. 관리자에게 "내 근무 서버 새 버전"을 말씀해 주세요.'; mwDraw(); return; }   // 서버가 아직 예전 버전 (짝 요청을 모름)
       mw.hello = h;
       if (getTok()) load(''); else { mw.stage = 'pin'; mw.step = h.hasPin ? 'enter' : 'new1'; mwDraw(); focusPin(); }
     }, m => { mw.stage = 'msg'; mw.err = m; mwDraw(); });
   }
   function load(ym) {
     mw.stage = mw.data ? 'view' : 'load'; mw.loading = true; mwDraw();
-    mwRun('myWork', [getTok(), ym], d => { mw.data = d; mw.ym = d.ym; mw.stage = 'view'; mw.loading = false; mw.err = ''; markSeen(); mwDraw(); },
+    mwRun('myWork', [getTok(), ym], d => { if (as && d && d.name && d.name !== as) { mw.stage = 'msg'; mw.err = as + ' 님 근무는 아직 볼 수 없어요.'; mw.loading = false; mwDraw(); return; } mw.data = d; mw.ym = d.ym; mw.stage = 'view'; mw.loading = false; mw.err = ''; markSeen(); mwDraw(); },
       m => { mw.loading = false; mw.err = m; if (!mw.data) mw.stage = 'msg'; mwDraw(); });
   }
   function markSeen() {
     const L = mw && mw.data && mw.data.leave; let t = 0;
     ((L && L.apps) || []).forEach(a => { if ((a.status === '승인' || a.status === '반려') && a.decided) t = Math.max(t, Date.parse(a.decided) || 0); });
     if (t && t > Number(lsGet(seenKey()) || 0)) lsSet(seenKey(), String(t));
-    if (t >= news) { news = 0; inject(); }
+    if (t >= (news[me()] || 0)) { news[me()] = 0; inject(); }
   }
   function toView() { mw.stage = 'view'; mw.err = ''; mw.f = null; mw.pv = null; mwDraw(); const el = document.querySelector('.mw'); if (el) el.scrollTop = 0; }
   function focusPin() { setTimeout(() => { const f = document.getElementById('mwpin'); if (f) f.focus(); }, 50); }
@@ -67,8 +72,10 @@ export function setupMyWork(ctx) {
     if (!dlg() || dlg().kind !== 'mywork' || !mw) { return; }
     const y0 = el.querySelector('.mw') && mw.keepY !== false ? el.querySelector('.mw').scrollTop : 0;
     const inForm = /^(apply|sign|form|done)$/.test(mw.stage);
+    const pp = people();
     const top = '<div class="mw-top"><b>' + esc(me() || '') + ' 님 ' + (inForm ? (mw.stage === 'form' ? '신청서' : '휴가 신청') : '내 근무') + '</b>' +
-      (inForm ? '<button data-mw="back">← 내 근무</button>' : '<button data-x="1">← 오늘 정비</button>') + '</div>';
+      (inForm ? '<button data-mw="back">← 내 근무</button>' : '<button data-x="1">← 오늘 정비</button>') + '</div>' +
+      (pp.length > 1 && !inForm ? '<div class="mw-who">' + pp.map(n => '<button data-mw="who" data-v="' + esc(n) + '" aria-pressed="' + (n === me()) + '">' + esc(n) + '</button>').join('') + '</div>' : '');
     let body = '';
     if (mw.stage === 'load') body = '<div class="mw-load">불러오는 중…</div>';
     else if (mw.stage === 'msg') body = '<div class="mw-card"><p style="margin:0;font-size:16px">' + esc(mw.err) + '</p></div>';
@@ -301,6 +308,7 @@ export function setupMyWork(ctx) {
     const k = b.getAttribute('data-mw'), v = b.getAttribute('data-v');
     if (k === 'open') { open(); return; }
     if (!mw || mwBusy) return;
+    if (k === 'who') { if (v !== me()) open(v); return; }
     const f = mw.f;
     if (f && mw.stage === 'apply') syncForm();
     if (k === 'pin') pinGo();
@@ -345,5 +353,5 @@ export function setupMyWork(ctx) {
       mwRun('myLeaveCancel', [getTok(), cid], d => { mw.data = d; mwDraw(); toast('신청을 취소했어요'); }, m => { mw.err = m; mwDraw(); });
     }
   });
-  return { inject, draw: mwDraw, back, closed, reset: () => { news = 0; newsAsked = false; } };
+  return { inject, draw: mwDraw, back, closed, reset: () => { news = {}; newsAsked = false; as = ''; } };
 }

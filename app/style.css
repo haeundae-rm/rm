@@ -489,3 +489,7 @@ body.adm main>.alert{background:var(--red-soft);color:var(--warn-red)}
 .sum .who .each{font-size:13px;color:var(--muted);font-weight:600}
 .names button.teampick{position:relative;font-size:16px;letter-spacing:-.3px;white-space:nowrap;padding:10px 6px}
 .names button.teampick small{position:absolute;top:-8px;right:8px;font:800 10px/1 var(--f-body);color:#fff;background:var(--navy);border-radius:6px;padding:3px 5px;letter-spacing:0}
+/* 내 근무: 2인 1조 사람 바꾸기 */
+.mw-who{display:flex;gap:8px;padding:10px 16px;background:var(--surface);border-bottom:1px solid var(--line);z-index:1}
+.mw-who button{flex:1;min-height:44px;border-radius:12px;border:1.5px solid var(--line);background:var(--bg);color:var(--ink);font:800 16px var(--f-body);cursor:pointer}
+.mw-who button[aria-pressed="true"]{background:var(--navy);border-color:var(--navy);color:#fff}

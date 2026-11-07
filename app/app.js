@@ -3,7 +3,7 @@
 import * as S from './store.js';
 import { setupMyWork } from './mywork.js';
 
-const APP_VER = '2026.11.07-4';
+const APP_VER = '2026.11.07-5';
 // 관리자 = 보안 규칙 isAdmin 과 같은 목록 (UID 는 공개돼도 되는 값)
 const ADMINS = [
   { uid: 'iw2orXgIgPgTbLUQa0b41XJ9Dvd2', label: '소장', email: 'unieshaeundae+admin@gmail.com' },
@@ -1116,18 +1116,18 @@ function onSheet(t, at) {
 // =====================================================================
 // 내 근무 · 연차 (서버 = 기존 Apps Script. 본인 확인은 Firebase 로그인 표)
 // =====================================================================
-async function callOld(fn, args) {
+async function callOld(fn, args, as) {
   let t;
   try { t = await S.idToken(); } catch (e) { throw new Error('로그인 정보를 가져오지 못했어요. 인터넷 연결을 확인해 주세요.'); }
   let r;
-  try { r = await fetch(OLD_APP, { method: 'POST', body: JSON.stringify({ fn, idToken: t, args: args || [] }) }); }
+  try { r = await fetch(OLD_APP, { method: 'POST', body: JSON.stringify(Object.assign({ fn, idToken: t, args: args || [] }, as ? { as } : {})) }); }
   catch (e) { throw new Error('인터넷 연결을 확인하고 다시 해 주세요.'); }
   let j;
   try { j = await r.json(); } catch (e) { throw new Error('서버 응답을 읽지 못했어요. 잠시 후 다시 해 주세요.'); }
   if (!j || !j.ok) throw new Error(j && j.error || '처리하지 못했어요.');
   return j.data;
 }
-const MW = setupMyWork({ esc, lsGet, lsSet, toast, vibe, call: callOld, me: () => me, isAdm: () => isAdm, dlg: () => dlg, setDlg: d => { dlg = d; }, closeDlg: () => closeDlg() });
+const MW = setupMyWork({ esc, lsGet, lsSet, toast, vibe, call: callOld, me: () => me, mate: () => mateOf(me), pair: () => { const mt = mateOf(me); return (teamPairs.filter(p => p.indexOf(me) >= 0)[0] || [me, mt]).slice(); }, isAdm: () => isAdm, dlg: () => dlg, setDlg: d => { dlg = d; }, closeDlg: () => closeDlg() });
 
 // =====================================================================
 // 휴대폰 오류 자동 기록 → Firestore errors (관리자 화면 '📵 휴대폰 오류'). 같은 오류는 한 번, 한 번 열 때 최대 5건
