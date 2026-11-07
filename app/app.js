@@ -3,7 +3,7 @@
 import * as S from './store.js';
 import { setupMyWork } from './mywork.js';
 
-const APP_VER = '2026.11.07-3';
+const APP_VER = '2026.11.07-4';
 // 관리자 = 보안 규칙 isAdmin 과 같은 목록 (UID 는 공개돼도 되는 값)
 const ADMINS = [
   { uid: 'iw2orXgIgPgTbLUQa0b41XJ9Dvd2', label: '소장', email: 'unieshaeundae+admin@gmail.com' },
@@ -238,7 +238,7 @@ function buildTeam() {
   if (!parts.length) return null;
   const tag = b => { b.m.rooms.forEach(x => { x.own = b.m.name; }); b.m.removed.forEach(x => { x.own = b.m.name; }); };
   parts.forEach(tag);
-  if (parts.length === 1) { const b = parts[0]; if (mt) b.m.team = [b.m.name]; return b; }   // 짝이 휴무 → 혼자 화면
+  if (parts.length === 1) { const b = parts[0]; if (mt) { b.m.team = [b.m.name]; b.m.mateOff = b.m.name === me ? mt : me; } return b; }   // 짝이 휴무 → 혼자 화면
   const seen = {}, rooms = [];
   parts.forEach(b => b.m.rooms.forEach(x => { if (!seen[x.room]) { seen[x.room] = 1; rooms.push(x); } }));
   const m = { name: me, team: parts.map(b => b.m.name), rooms, removed: parts[0].m.removed.concat(parts[1].m.removed),
@@ -452,10 +452,10 @@ function renderMaid(m, asAdmin) {
   const dueLeft = m.rooms.filter(x => x.due && !recOf(recWho(m, x), x.room)).sort((a, b) => (a.due < b.due ? -1 : 1));
   const dirtyLeft = m.rooms.filter(x => isDirty(x.room) && !recOf(recWho(m, x), x.room));
   let html = asAdmin ? '' : bands() + instHtml() + ventHtml() + swapBanner(m);
-  html += asAdmin ? '<div class="amode"><button class="ghost back" data-back="1">← 전체 현황</button><span>' + (m.team && m.team.length > 1 ? esc(m.team.join('·')) + ' 조 화면 (조 휴대폰과 같음 · 객실을 누르면 배정받은 분 이름으로 대신 처리)' : esc(m.name) + ' 님 화면 (객실을 누르면 대신 처리)') + '</span></div>' : '';
+  html += asAdmin ? '<div class="amode"><button class="ghost back" data-back="1">← 전체 현황</button><span>' + (m.team && m.team.length > 1 ? esc(m.team.join('·')) + ' 조 화면 (조 휴대폰과 같음 · 객실을 누르면 배정받은 분 이름으로 대신 처리)' : esc(m.name) + ' 님 화면' + (m.mateOff ? ' · 2인 1조 (짝 ' + esc(m.mateOff) + ' 님 오늘 배정 없음)' : '') + ' (객실을 누르면 대신 처리)') + '</span></div>' : '';
   const tile = (cls, n, lbl, jump) => (jump ? '<button class="stat ' + cls + '" data-jump="' + esc(jump) + '">' : '<div class="stat ' + cls + '">') + '<b>' + n + '</b><span>' + lbl + '</span>' + (jump ? '</button>' : '</div>');
   const isTeam = !!(m.team && m.team.length > 1), teamName = isTeam ? m.team.join(' · ') : m.name;
-  html += '<section class="sum' + (allDone ? ' alldone' : '') + '"><div class="who">' + (m.team ? '<span class="teamb">2인 1조</span>' : '') + esc(m.floors) + ' · 오늘 객실 ' + t + '실' +
+  html += '<section class="sum' + (allDone ? ' alldone' : '') + '"><div class="who">' + (m.team ? '<span class="teamb">2인 1조' + (m.mateOff ? ' · ' + esc(shortName(m.mateOff)) + ' 휴무' : '') + '</span>' : '') + esc(m.floors) + ' · 오늘 객실 ' + t + '실' +
     (isTeam ? ' <small class="each">(' + m.each.map(e => esc(shortName(e.name)) + ' ' + e.units).join(' · ') + ')</small>' : '') + '</div>' +
     '<div class="greet">' + esc(teamName) + ' 님, ' + (allDone ? '<em>오늘 정비 끝!</em>' : '남은 객실 <em class="n' + (bump ? ' bump' : '') + '">' + rem + '</em>실') + '</div>' +
     '<div class="stats"><div class="stat done"><b class="of" aria-label="완료 ' + d + ' / ' + t + '">' + d + '<small> / ' + t + '</small></b><span>완료</span></div>' +
@@ -646,7 +646,8 @@ function vfBody() {
 // 관리자: 2인 1조인 분을 누르면 조 휴대폰과 같은 합친 화면 (짝이 오늘 배정 없으면 한 분 화면)
 function adminView(n) {
   const a = maidOf(n), mt = mateOf(n), b = mt ? maidOf(mt) : null;
-  if (!a || !b) return a;
+  if (!a) return a;
+  if (!b) return mt ? Object.assign({}, a, { team: [a.name], mateOff: mt }) : a;   // 짝이 오늘 배정 없음 → 한 분 화면 + 2인 1조 표시
   const pair = (teamPairs.filter(p => p.indexOf(n) >= 0)[0] || [n, mt]), ms = pair.map(x => (x === a.name ? a : b));
   const own = (m, x) => Object.assign({}, x, { own: m.name });
   const seen = {}, rooms = [];
