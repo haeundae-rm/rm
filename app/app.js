@@ -3,7 +3,7 @@
 import * as S from './store.js';
 import { setupMyWork } from './mywork.js';
 
-const APP_VER = '2026.11.07-2';
+const APP_VER = '2026.11.07-3';
 // 관리자 = 보안 규칙 isAdmin 과 같은 목록 (UID 는 공개돼도 되는 값)
 const ADMINS = [
   { uid: 'iw2orXgIgPgTbLUQa0b41XJ9Dvd2', label: '소장', email: 'unieshaeundae+admin@gmail.com' },
@@ -55,7 +55,9 @@ function nowHM() { return hm(Date.now()); }
 function labelOf(d) { const x = new Date(d + 'T00:00:00+09:00'); return (x.getMonth() + 1) + '월 ' + x.getDate() + '일 (' + '일월화수목금토'[x.getDay()] + ')'; }
 function maidOf(n) { return data ? data.maids.filter(m => m.name === n || (m.team && m.team.indexOf(n) >= 0))[0] || null : null; }
 // 이 객실의 배정 주인 (조 화면에서 누가 받은 객실인지) — 기록은 이 이름으로 저장 → 실적 각자 그대로
-function ownerOf(room) { const m = data && data.maids[0]; if (!m) return me; const x = m.rooms.filter(y => y.room === room)[0] || (m.removed || []).filter(y => y.room === room)[0]; return (x && x.own) || m.name || me; }
+let shownM = null;   // 지금 그려진 메이드 화면 (조면 합친 것)
+function recWho(m, x) { return x.own || m.name; }
+function ownerOf(room) { const m = (isAdm ? shownM : null) || (data && data.maids[0]); if (!m) return me; const x = m.rooms.filter(y => y.room === room)[0] || (m.removed || []).filter(y => y.room === room)[0]; return (x && x.own) || m.name || me; }
 // 조 휴대폰에서 객실 추가는 오늘 배정이 있는 쪽으로 (배정 없는 이름은 기록이 규칙에 막힘)
 function meLabel() { const mt = mateOf(me); if (!mt) return me; const p = teamPairs.filter(x => x.indexOf(me) >= 0)[0]; return (p || [me, mt]).join(' · '); }
 function isMine(n) { return !!n && (n === me || n === mateOf(me)); }
@@ -64,7 +66,7 @@ function roomOf(m, r) { return m.rooms.filter(x => x.room === r)[0] || null; }
 function RK(name, room) { return isAdm ? room + '|' + name : room; }
 function recOf(name, room) { return recs[RK(name, room)]; }
 function totalUnits(m) { return m.rooms.reduce((s, x) => s + W(x.room), 0); }
-function doneCount(m) { return m.rooms.reduce((s, x) => s + (recOf(m.name, x.room) ? W(x.room) : 0), 0); }
+function doneCount(m) { return m.rooms.reduce((s, x) => s + (recOf(recWho(m, x), x.room) ? W(x.room) : 0), 0); }
 function tagKey(t) { return String(t).split(':')[0]; }
 function tagHtml(t, label) {
   const k = tagKey(t), nm = String(t).indexOf(':') > 0 ? String(t).slice(String(t).indexOf(':') + 1) : '';
@@ -362,7 +364,7 @@ function render() {
     const dt = isAdm ? '객실 통합 관리 시스템' : '정비 레포트'; if (document.title !== dt) document.title = dt; }
   if (isAdm) {
     $('#bar').innerHTML = '<div class="mebar"><span class="mechip">관리자 · ' + esc((ADMINS.filter(a => a.uid === user.uid)[0] || {}).label || '') + '</span>' + noticeBtn(null) + sndBtn() + '</div>';
-    if (viewMaid && maidOf(viewMaid)) renderMaid(maidOf(viewMaid), true); else { viewMaid = null; renderAdmin(); }
+    if (viewMaid && maidOf(viewMaid)) renderMaid(adminView(viewMaid), true); else { viewMaid = null; renderAdmin(); }
   } else if (!me) { $('#bar').innerHTML = ''; renderPicker(); }
   else if (data.noPlan) {
     $('#bar').innerHTML = '<div class="mebar"><span class="mechip">' + esc(meLabel()) + ' 님</span>' + noticeBtn(me) + sndBtn() + '</div>';
@@ -422,10 +424,10 @@ function noteRest(x) { return String(x.note || '').split(' · ').filter(s => !/(
 const justDone = {}, lastRem = {}, shown = {}, finArmed = {};
 function isDirty(room) { return (data.dirty || []).indexOf(room) >= 0; }
 function roomCard(m, x, isTeam) {
-  const r = recOf(m.name, x.room), cls = r ? ' done' : (isDirty(x.room) ? ' dirty' : '');
+  const r = recOf(recWho(m, x), x.room), cls = r ? ' done' : (isDirty(x.room) ? ' dirty' : '');
   const hot = !r && x.due && x.due <= addMin(nowHM(), 60) ? ' duehot' : '';
   const pri = !r && (x.due || x.after) ? ' pri' : '', nt = noteRest(x), mm = memoRest(x);
-  const key = RK(m.name, x.room), pop = r && justDone[key] === 1;
+  const key = RK(recWho(m, x), x.room), pop = r && justDone[key] === 1;
   if (pop) justDone[key] = 2;
   const seal = r ? '<span class="seal"><i>CHECK</i><b>정비완료</b>' + (isAdm ? '<span>' + hm(r.at) + '</span>' : '<span class="ck">✔</span>') + '</span>' : '';
   return '<button class="room' + cls + pri + hot + (pop ? ' pop' : '') + '" data-room="' + esc(x.room) + '"><span class="no">' + esc(x.room) + (isTeam && x.own ? '<span class="own">' + esc(shortName(x.own)) + '</span>' : '') + '</span><span class="mid">' +
@@ -441,18 +443,19 @@ const ventHidden = {};
 function ventHtml() { const t = nowHM(); if (t < VENT_FROM || t >= VENT_TO || lsGet(ventKey()) === '1' || ventHidden[ventKey()]) return ''; return '<div class="vent"><span class="vi">🪟</span><span class="vt"><b>12시 환기 알림제</b>점심 식사 맛있게 드시고, 드신 후 환기 부탁드립니다.</span><button data-vent="1">확인</button></div>'; }
 function renderMaid(m, asAdmin) {
   const d = doneCount(m), t = totalUnits(m), rem = t - d;
-  const myPend = m.rooms.some(x => pend[RK(m.name, x.room)]);
+  shownM = m;
+  const myPend = m.rooms.some(x => pend[RK(recWho(m, x), x.room)]);
   const allDone = rem === 0 && t > 0 && !myPend;   // '끝'은 서버가 받은 뒤에
   const prev = lastRem[m.name], bump = prev !== undefined && rem < prev;
   lastRem[m.name] = rem;
   if (!asAdmin) cheer(m, d, t, rem, bump, myPend);
-  const dueLeft = m.rooms.filter(x => x.due && !recOf(m.name, x.room)).sort((a, b) => (a.due < b.due ? -1 : 1));
-  const dirtyLeft = m.rooms.filter(x => isDirty(x.room) && !recOf(m.name, x.room));
+  const dueLeft = m.rooms.filter(x => x.due && !recOf(recWho(m, x), x.room)).sort((a, b) => (a.due < b.due ? -1 : 1));
+  const dirtyLeft = m.rooms.filter(x => isDirty(x.room) && !recOf(recWho(m, x), x.room));
   let html = asAdmin ? '' : bands() + instHtml() + ventHtml() + swapBanner(m);
-  html += asAdmin ? '<div class="amode"><button class="ghost back" data-back="1">← 전체 현황</button><span>' + esc(m.name) + ' 님 화면 (객실을 누르면 대신 처리)</span></div>' : '';
+  html += asAdmin ? '<div class="amode"><button class="ghost back" data-back="1">← 전체 현황</button><span>' + (m.team && m.team.length > 1 ? esc(m.team.join('·')) + ' 조 화면 (조 휴대폰과 같음 · 객실을 누르면 배정받은 분 이름으로 대신 처리)' : esc(m.name) + ' 님 화면 (객실을 누르면 대신 처리)') + '</span></div>' : '';
   const tile = (cls, n, lbl, jump) => (jump ? '<button class="stat ' + cls + '" data-jump="' + esc(jump) + '">' : '<div class="stat ' + cls + '">') + '<b>' + n + '</b><span>' + lbl + '</span>' + (jump ? '</button>' : '</div>');
-  const isTeam = !asAdmin && m.team && m.team.length > 1, teamName = isTeam ? m.team.join(' · ') : m.name;
-  html += '<section class="sum' + (allDone ? ' alldone' : '') + '"><div class="who">' + (m.team && !asAdmin ? '<span class="teamb">2인 1조</span>' : '') + esc(m.floors) + ' · 오늘 객실 ' + t + '실' +
+  const isTeam = !!(m.team && m.team.length > 1), teamName = isTeam ? m.team.join(' · ') : m.name;
+  html += '<section class="sum' + (allDone ? ' alldone' : '') + '"><div class="who">' + (m.team ? '<span class="teamb">2인 1조</span>' : '') + esc(m.floors) + ' · 오늘 객실 ' + t + '실' +
     (isTeam ? ' <small class="each">(' + m.each.map(e => esc(shortName(e.name)) + ' ' + e.units).join(' · ') + ')</small>' : '') + '</div>' +
     '<div class="greet">' + esc(teamName) + ' 님, ' + (allDone ? '<em>오늘 정비 끝!</em>' : '남은 객실 <em class="n' + (bump ? ' bump' : '') + '">' + rem + '</em>실') + '</div>' +
     '<div class="stats"><div class="stat done"><b class="of" aria-label="완료 ' + d + ' / ' + t + '">' + d + '<small> / ' + t + '</small></b><span>완료</span></div>' +
@@ -640,7 +643,21 @@ function vfBody() {
   if (!bad) b += '<p class="rec">보고서의 모든 객실이 앱에서 담당 그대로 완료됐어요.</p>';
   return b + '<div class="acts"><button data-x="1">닫기</button><button class="go" data-verify="1">다시 대조</button></div>';
 }
+// 관리자: 2인 1조인 분을 누르면 조 휴대폰과 같은 합친 화면 (짝이 오늘 배정 없으면 한 분 화면)
+function adminView(n) {
+  const a = maidOf(n), mt = mateOf(n), b = mt ? maidOf(mt) : null;
+  if (!a || !b) return a;
+  const pair = (teamPairs.filter(p => p.indexOf(n) >= 0)[0] || [n, mt]), ms = pair.map(x => (x === a.name ? a : b));
+  const own = (m, x) => Object.assign({}, x, { own: m.name });
+  const seen = {}, rooms = [];
+  ms.forEach(m => m.rooms.forEach(x => { if (!seen[x.room]) { seen[x.room] = 1; rooms.push(own(m, x)); } }));
+  const t = { name: n, team: ms.map(m => m.name), rooms, removed: ms.reduce((r, m) => r.concat((m.removed || []).map(x => own(m, x))), []),
+    each: ms.map(m => ({ name: m.name, units: totalUnits(m) })) };
+  t.floors = floorsOf(t);
+  return t;
+}
 function renderAdmin() {
+  shownM = null;
   let all = 0, done = 0; const issues = [], dueRows = [];
   data.maids.forEach(m => m.rooms.forEach(x => {
     all += W(x.room); const r = recOf(m.name, x.room); if (r) done += W(x.room);
@@ -1002,7 +1019,7 @@ document.addEventListener('click', e => {
   const jp = at('[data-jump]'); if (jp) { const el = document.querySelector('[data-room="' + jp.getAttribute('data-jump') + '"]'); if (el) { el.scrollIntoView({ behavior: 'smooth', block: 'center' }); el.classList.remove('flash'); void el.offsetWidth; el.classList.add('flash'); } return; }
   if (at('[data-swapok]')) { const seen = lsJson(swapKey(), []); swapNew().forEach(c => { if (seen.indexOf(c.id) < 0) seen.push(c.id); }); lsSet(swapKey(), JSON.stringify(seen.slice(-200))); render(); return; }
   const rs = at('[data-restore]');
-  if (rs && !busy) { const who = isAdm ? viewMaid : ownerOf(rs.getAttribute('data-restore')); if (!who) return; change('추가', who, rs.getAttribute('data-restore'), null, isAdm); say(rs.getAttribute('data-restore') + '호를 다시 넣었어요.'); return; }
+  if (rs && !busy) { const who = ownerOf(rs.getAttribute('data-restore')); if (!who) return; change('추가', who, rs.getAttribute('data-restore'), null, isAdm); say(rs.getAttribute('data-restore') + '호를 다시 넣었어요.'); return; }
   if (at('[data-inst-x]')) { instClosed = true; lsSet('rm_inst_hide', String(Date.now() + 7 * 864e5)); render(); return; }
   if (at('[data-inst]')) { dlg = { kind: 'instguide', os: OS === 'ios' ? 'ios' : 'android' }; drawDlg(); return; }
   if (at('[data-vent]')) { ventHidden[ventKey()] = 1; lsSet(ventKey(), '1'); render(); return; }
@@ -1013,7 +1030,7 @@ document.addEventListener('click', e => {
   const rm = at('[data-room]');
   if (rm) {
     const room = rm.getAttribute('data-room');
-    if (isAdm && viewMaid) { dlg = recOf(viewMaid, room) ? { kind: 'room', maid: viewMaid, room, proxy: true } : { kind: 'proxyask', maid: viewMaid, room }; drawDlg(); return; }
+    if (isAdm && viewMaid) { const ow = ownerOf(room); dlg = recOf(ow, room) ? { kind: 'room', maid: ow, room, proxy: true } : { kind: 'proxyask', maid: ow, room }; drawDlg(); return; }
     if (!isAdm && me) { dlg = { kind: 'room', maid: ownerOf(room), room }; drawDlg(); }
   }
 });
