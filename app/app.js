@@ -657,8 +657,30 @@ function adminView(n) {
   t.floors = floorsOf(t);
   return t;
 }
+// 관리자 화면 = 메뉴(탭) 4개: 오늘 현황 · 배정 · VOC · 설정 (2026-11-07). 문제는 맨 위 빨간 띠로만
+let admTab = (() => { try { return localStorage.getItem('rm_admtab') || 'today'; } catch (e) { return 'today'; } })(), mgSort = 'order';
+const ADM_TABS = [['today', '오늘 현황'], ['assign', '배정'], ['voc', 'VOC'], ['set', '설정']];
+function admAlerts() {
+  const out = [];
+  if (data.noPlan) out.push('<button class="aal" data-atab="assign">⚠ 오늘 배정이 아직 앱에 없어요 · <b>배정 → 정비보고서 올리기</b></button>');
+  if (!relay || !relay.at || !relay.ok || Date.now() - relay.at > 12 * 60000) out.push('<button class="aal" data-atab="assign">⚠ ' + relayLine().replace(/<[^>]+>/g, '') + '</button>');
+  if (cmp && cmp.day === today && !cmp.ok) out.push('<button class="aal" data-atab="assign">⚠ 오늘 대조 차이 ' + cmp.n + '건 · <b>배정</b>에서 보기</button>');
+  if (errDocs.length) out.push('<button class="aal" data-atab="set">📵 휴대폰 오류 오늘 ' + errDocs.length + '건 · <b>설정</b>에서 보기</button>');
+  return out.length ? '<div class="aals">' + out.join('') + '</div>' : '';
+}
+function sortedMaids() {
+  const list = data.maids.slice(), pos = n => list.findIndex(m => m.name === n);
+  const ratio = m => { const t = totalUnits(m); return t ? doneCount(m) / t : 1; };
+  const floor = m => Math.min.apply(null, m.rooms.map(x => Math.floor(Number(x.room) / 100)).concat([99]));
+  if (mgSort === 'low') list.sort((a, b) => ratio(a) - ratio(b) || pos(a.name) - pos(b.name));
+  else if (mgSort === 'floor') list.sort((a, b) => floor(a) - floor(b) || pos(a.name) - pos(b.name));
+  const out = [], used = {};   // 2인 1조는 나란히
+  list.forEach(m => { if (used[m.name]) return; used[m.name] = 1; out.push(m); const mt = mateOf(m.name), y = mt && list.filter(z => z.name === mt)[0]; if (y && !used[mt]) { used[mt] = 1; out.push(y); } });
+  return out;
+}
 function renderAdmin() {
   shownM = null;
+  if (!ADM_TABS.some(t => t[0] === admTab)) admTab = 'today';
   let all = 0, done = 0; const issues = [], dueRows = [];
   data.maids.forEach(m => m.rooms.forEach(x => {
     all += W(x.room); const r = recOf(m.name, x.room); if (r) done += W(x.room);
@@ -667,12 +689,14 @@ function renderAdmin() {
   }));
   dueRows.sort((a, b) => (a.x.due < b.x.due ? -1 : a.x.due > b.x.due ? 1 : Number(a.x.room) - Number(b.x.room)));
   const now = nowHM(), nts = data.notices || [];
-  let html = bands() + '<div class="amode"><b>관리자 모드</b><span>메이드를 누르면 그 화면을 볼 수 있어요.</span>' +
-    '<a class="ghost" href="' + OLD_APP + '" target="_blank" rel="noopener">📢 공지 · 📋 연차 관리 (기존 앱)</a><button class="ghost" data-admin-off="1">관리자 모드 끄기</button></div>' +
-    '<div>' + relayLine() + '</div>' + cmpLine() +
-    (data.noPlan ? '<div class="alert" style="margin-top:0">⚠ 오늘 배정이 아직 앱에 없어요. 아래 <b>정비보고서 올리기</b>로 올리면 1~2분 안에 들어와요.</div>' : '') + upCard() + vfCard() +
-    '<div class="kpis"><div class="kpi"><b>' + done + '<small style="font-size:14px">/' + all + '</small></b><span>완료 객실</span></div><div class="kpi"><b>' + dueRows.length + '</b><span>시간 정해진 미완료</span></div><div class="kpi"><b>' + issues.length + '</b><span>메모 남긴 객실</span></div></div>';
-  html += '<p class="sec" style="margin-top:0">메이드별 진행 (' + data.maids.length + '명)</p><div class="mgrid">' + data.maids.map(m => {
+  const badge = { assign: data.noPlan || (cmp && cmp.day === today && !cmp.ok) ? '!' : '', set: errDocs.length ? String(errDocs.length) : '', today: dueRows.filter(o => o.x.due <= now).length ? '!' : '' };
+  let html = bands() + '<div class="amode"><b>관리자 모드</b><span>' + esc(data.label || '') + '</span>' +
+    '<button class="ghost" data-admin-off="1">관리자 모드 끄기</button></div>' + admAlerts() +
+    '<nav class="atabs">' + ADM_TABS.map(t => '<button data-atab="' + t[0] + '" aria-pressed="' + (admTab === t[0]) + '">' + t[1] + (badge[t[0]] ? '<i>' + badge[t[0]] + '</i>' : '') + '</button>').join('') + '</nav>';
+  if (admTab === 'today') {
+    html += '<div class="kpis"><div class="kpi"><b>' + done + '<small style="font-size:14px">/' + all + '</small></b><span>완료 객실</span></div><div class="kpi"><b>' + dueRows.length + '</b><span>시간 정해진 미완료</span></div><div class="kpi"><b>' + issues.length + '</b><span>메모 남긴 객실</span></div></div>';
+    html += '<div class="mghead"><p class="sec" style="margin:0">메이드별 진행 (' + data.maids.length + '명)</p><div class="mgsort">' + [['order', '배정순'], ['low', '진행 낮은 순'], ['floor', '층별']].map(o => '<button data-mgsort="' + o[0] + '" aria-pressed="' + (mgSort === o[0]) + '">' + o[1] + '</button>').join('') + '</div></div>';
+  html += '<div class="mgrid">' + sortedMaids().map(m => {
     const d = doneCount(m), t = totalUnits(m), ic = m.rooms.filter(x => { const r = recOf(m.name, x.room); return r && r.memo; }).length;
     return '<button class="mg' + (d === t ? ' full' : '') + '" data-view="' + esc(m.name) + '"><b>' + esc(m.name) + (mateOf(m.name) ? ' <span class="teamb" title="2인 1조 · ' + esc(mateOf(m.name)) + '">조</span>' : '') + '</b><div class="bar"><i style="width:' + (t ? d / t * 100 : 0) + '%"></i></div><small>' + d + '/' + t + (ic ? ' · 메모 ' + ic : '') + '</small></button>';
   }).join('') + '</div>';
@@ -693,16 +717,22 @@ function renderAdmin() {
   }).join('') + '</div></div>';
   html += '<div class="card"><h3>객실 메모</h3><p class="rec" style="margin:0 0 6px">하자·악취 등 접수는 카톡·전화로 받아요. 여기는 메이드가 남긴 참고 메모예요.</p><div class="list">' + (issues.length ? issues.map(o =>
     '<div class="r"><span><b>' + esc(o.x.room) + '</b> · ' + esc(o.m.name) + (o.r.issues.length ? ' · ' + esc(o.r.issues.join(', ')) : '') + (o.r.memo ? '<br><small>' + esc(o.r.memo) + '</small>' : '') + '</span><span>' + hm(o.r.at) + '</span></div>').join('') : '<div class="r"><span>아직 없어요.</span><span></span></div>') + '</div></div>';
+  } else if (admTab === 'assign') {
+    html += '<div class="card"><h3>연결 상태</h3><div>' + relayLine() + '</div>' + cmpLine() + '</div>' + upCard() + vfCard();
   const chg = data.changes || [];
-  if (chg.length) {
-    const owner = {}; data.maids.forEach(m => m.rooms.forEach(x => { (owner[x.room] = owner[x.room] || []).push(m.name); }));
-    html += '<div class="card"><h3>오늘 추가·제외·교환된 객실</h3><div class="list">' + chg.slice().reverse().map(c => {
-      const dupN = c.kind === '추가' ? (owner[c.room] || []).filter(n => n !== c.maid) : [];
-      const selfRm = c.kind === '제외' && c.assigned && c.by !== '관리자';
-      const what = c.kind === '넘김' ? esc(c.maid) + ' → ' + esc(c.to) + ' (교환)' : esc(c.maid) + ' · ' + (selfRm ? '직접 제외' : esc(c.kind));
-      return '<div class="r' + (dupN.length || selfRm ? ' hot' : '') + '"><span><b>' + esc(c.room) + '</b> · ' + what + (c.by === '관리자' ? ' (관리자)' : '') + (dupN.length ? '<br><small>겹침: ' + esc(dupN.join(', ')) + ' 님 배정</small>' : '') + (selfRm ? '<br><small>정비하는 사람이 없어요 · 필요하면 메이드 화면에서 다시 추가</small>' : '') + '</span><span>' + hm(c.at) + '</span></div>';
-    }).join('') + '</div></div>';
-  }
+    if (chg.length) {
+      const owner = {}; data.maids.forEach(m => m.rooms.forEach(x => { (owner[x.room] = owner[x.room] || []).push(m.name); }));
+      html += '<div class="card"><h3>오늘 추가·제외·교환된 객실</h3><div class="list">' + chg.slice().reverse().map(c => {
+        const dupN = c.kind === '추가' ? (owner[c.room] || []).filter(n => n !== c.maid) : [];
+        const selfRm = c.kind === '제외' && c.assigned && c.by !== '관리자';
+        const what = c.kind === '넘김' ? esc(c.maid) + ' → ' + esc(c.to) + ' (교환)' : esc(c.maid) + ' · ' + (selfRm ? '직접 제외' : esc(c.kind));
+        return '<div class="r' + (dupN.length || selfRm ? ' hot' : '') + '"><span><b>' + esc(c.room) + '</b> · ' + what + (c.by === '관리자' ? ' (관리자)' : '') + (dupN.length ? '<br><small>겹침: ' + esc(dupN.join(', ')) + ' 님 배정</small>' : '') + (selfRm ? '<br><small>정비하는 사람이 없어요 · 필요하면 메이드 화면에서 다시 추가</small>' : '') + '</span><span>' + hm(c.at) + '</span></div>';
+      }).join('') + '</div></div>';
+    }
+  } else if (admTab === 'voc') {
+    html += vocHtml();
+  } else {
+    html += '<div class="card"><h3>공지 · 연차 관리</h3><p class="rec" style="margin:0 0 6px">공지 올리기·연차 승인은 아직 기존 앱에서 해요.</p><div class="acts"><a class="go" style="text-decoration:none;text-align:center" href="' + OLD_APP + '" target="_blank" rel="noopener">📢 공지 · 📋 연차 관리 열기</a></div></div>';
   if (nts.length) html += '<div class="card"><h3>공지 확인</h3><div class="list">' + nts.map(n => {
     const tg = data.maids.filter(m => !(n.targets && n.targets.length) || n.targets.indexOf(m.name) >= 0).map(m => m.name);
     const ok = tg.filter(nm => acked(n, nm)), no = tg.filter(nm => !acked(n, nm));
@@ -723,9 +753,11 @@ function renderAdmin() {
     (devs.length ? '<div class="acts" style="margin-top:8px"><button class="danger" data-release-all="1">등록 전체 해제 (' + devs.length + '대)</button></div>' : '') + '</div>';
   if (errDocs.length) html += '<div class="card"><h3>📵 휴대폰 오류 (오늘 ' + errDocs.length + '건)</h3><p class="rec" style="margin:0 0 6px">메이드 휴대폰에서 생긴 문제예요. 같은 오류가 여러 번 보이면 Claude 에게 이 화면을 보여 주세요.</p><div class="list">' +
     errDocs.slice(0, 10).map(x => '<div class="r"><span><b>' + esc(x.name || '이름 없음') + '</b> · ' + esc(x.where || '') + '<br><small>' + esc(String(x.msg || '').slice(0, 160)) + '</small></span><span>' + hm(x.at) + '</span></div>').join('') + '</div></div>';
+  }
   html += '<p class="rec" style="text-align:center">새 앱 ' + APP_VER + '</p>';
   $('#main').innerHTML = html;
 }
+function vocHtml() { return '<div class="card"><h3>고객만족도 VOC</h3><p class="rec" style="margin:0">준비 중이에요.</p></div>'; }
 
 // =====================================================================
 // 저장 (누르는 즉시 휴대폰에 보관 → 서버로. 실패해도 휴대폰에 기억했다가 다시)
@@ -1012,6 +1044,8 @@ document.addEventListener('click', e => {
   const pk = at('[data-pick]'); if (pk) { dlg = { kind: 'claim', name: pk.getAttribute('data-pick'), label: pk.getAttribute('data-label') || pk.getAttribute('data-pick') }; drawDlg(); return; }
   if (at('[data-admin-in]')) { dlg = { kind: 'login', who: 0, pw: '' }; drawDlg(); return; }
   if (at('[data-admin-off]')) { S.signOut(); return; }
+  const atb = at('[data-atab]'); if (atb && isAdm) { admTab = atb.getAttribute('data-atab'); try { localStorage.setItem('rm_admtab', admTab); } catch (e) {} viewMaid = null; render(); window.scrollTo(0, 0); return; }
+  const mgs = at('[data-mgsort]'); if (mgs && isAdm) { mgSort = mgs.getAttribute('data-mgsort'); render(); return; }
   if (at('[data-upload]')) { pickXlsx(); return; }
   if (at('[data-verify]')) { pickVerify(); return; }
   if (at('[data-release-all]')) { dlg = { kind: 'releaseall' }; drawDlg(); return; }

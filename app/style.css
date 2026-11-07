@@ -493,3 +493,15 @@ body.adm main>.alert{background:var(--red-soft);color:var(--warn-red)}
 .mw-who{display:flex;gap:8px;padding:10px 16px;background:var(--surface);border-bottom:1px solid var(--line);z-index:1}
 .mw-who button{flex:1;min-height:44px;border-radius:12px;border:1.5px solid var(--line);background:var(--bg);color:var(--ink);font:800 16px var(--f-body);cursor:pointer}
 .mw-who button[aria-pressed="true"]{background:var(--navy);border-color:var(--navy);color:#fff}
+/* 관리자 메뉴(탭) · 이상 알림 · 메이드 정렬 (2026-11-07) */
+.aals{display:flex;flex-direction:column;gap:6px}
+.aal{display:block;width:100%;text-align:left;border:0;border-radius:12px;padding:11px 14px;background:color-mix(in srgb,var(--warn-red) 10%,var(--surface));color:var(--warn-red);font:700 14px var(--f-body);cursor:pointer;box-shadow:inset 4px 0 0 var(--warn-red)}
+.aal b{text-decoration:underline}
+.atabs{position:sticky;top:0;z-index:5;display:grid;grid-template-columns:repeat(4,1fr);gap:4px;padding:4px;margin:2px 0;background:var(--surface);border:1px solid var(--line);border-radius:14px;box-shadow:0 2px 8px rgba(15,23,42,.06)}
+.atabs button{position:relative;min-height:44px;border:0;border-radius:10px;background:transparent;color:var(--muted);font:800 15px var(--f-body);cursor:pointer}
+.atabs button[aria-pressed="true"]{background:var(--navy);color:#fff}
+.atabs button i{position:absolute;top:5px;right:8px;min-width:16px;height:16px;padding:0 4px;border-radius:99px;background:var(--warn-red);color:#fff;font:800 10px/16px var(--f-body);font-style:normal}
+.mghead{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap}
+.mgsort{display:flex;gap:4px}
+.mgsort button{border:1.5px solid var(--line);background:var(--surface);color:var(--muted);border-radius:99px;padding:5px 11px;font:700 13px var(--f-body);cursor:pointer}
+.mgsort button[aria-pressed="true"]{border-color:var(--navy);color:var(--navy);background:color-mix(in srgb,var(--navy) 8%,var(--surface))}
