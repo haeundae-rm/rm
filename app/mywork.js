@@ -15,8 +15,10 @@ export function setupMyWork(ctx) {
   // 기존 앱의 mwRun 과 같은 모양 (fn, 인자, 성공, 실패) — 첫 인자(dev)는 서버가 로그인 표로 채움
   function mwRun(fn, args, ok, fail) {
     mwBusy = true;
-    ctx.call(fn, args, as).then(x => { mwBusy = false; ok(x); }).catch(e => {
+    const g = mw;   // 이 요청을 보낸 화면 — 닫았거나(사람을 바꿔) 새로 열었으면 늦게 온 응답은 버림
+    ctx.call(fn, args, as).then(x => { mwBusy = false; if (!mw || mw !== g) return; ok(x); }).catch(e => {
       mwBusy = false;
+      if (!mw || mw !== g) return;
       const m = String(e && e.message || e).replace(/^(Exception|Error):\s*/, '');
       if (m.indexOf('MWLOCK:') >= 0 && mw) { lsSet(tkKey(), null); mw.stage = 'pin'; mw.step = 'enter'; mw.err = ''; mwDraw(); focusPin(); return; }
       (fail || function () { if (mw) { mw.err = m; mwDraw(); } })(m.replace(/^.*?MWLOCK:/, ''));
@@ -307,8 +309,8 @@ export function setupMyWork(ctx) {
     const b = e.target.closest && e.target.closest('[data-mw]'); if (!b || b.disabled) return;
     const k = b.getAttribute('data-mw'), v = b.getAttribute('data-v');
     if (k === 'open') { open(); return; }
+    if (k === 'who' && mw) { if (v !== me()) open(v); return; }   // 불러오는 중에도 바꿀 수 있음 (늦게 온 응답은 mwRun 이 버림)
     if (!mw || mwBusy) return;
-    if (k === 'who') { if (v !== me()) open(v); return; }
     const f = mw.f;
     if (f && mw.stage === 'apply') syncForm();
     if (k === 'pin') pinGo();
