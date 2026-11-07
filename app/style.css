@@ -505,3 +505,31 @@ body.adm main>.alert{background:var(--red-soft);color:var(--warn-red)}
 .mgsort{display:flex;gap:4px}
 .mgsort button{border:1.5px solid var(--line);background:var(--surface);color:var(--muted);border-radius:99px;padding:5px 11px;font:700 13px var(--f-body);cursor:pointer}
 .mgsort button[aria-pressed="true"]{border-color:var(--navy);color:var(--navy);background:color-mix(in srgb,var(--navy) 8%,var(--surface))}
+/* VOC (2026-11-07) */
+.vtxt{width:100%;box-sizing:border-box;font:500 15px/1.5 var(--f-body);padding:10px 12px;border-radius:12px;border:1.5px solid var(--line);background:var(--bg);color:var(--ink);resize:vertical}
+.vitem{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:12px 14px;margin:8px 0;box-shadow:inset 4px 0 0 var(--warn-red)}
+.vitem.good{box-shadow:inset 4px 0 0 #1f8a4c}
+.vtop{display:flex;flex-wrap:wrap;align-items:center;gap:6px}
+.vk{font:800 12px var(--f-body);color:#fff;background:var(--warn-red);border-radius:6px;padding:3px 7px}
+.vitem.good .vk{background:#1f8a4c}
+.vcat{font:700 12px var(--f-body);color:var(--muted);background:color-mix(in srgb,var(--muted) 12%,transparent);border-radius:6px;padding:3px 7px}
+.vroom{font:700 18px var(--f-num);color:var(--ink)}
+.vdate{margin-left:auto;font-size:12px;color:var(--muted)}
+.vtext{margin:8px 0;font-size:15px;line-height:1.5}
+.vresp{display:flex;flex-wrap:wrap;align-items:center;gap:6px}
+.vchip{border:1.5px solid var(--line);background:var(--surface);color:var(--muted);border-radius:99px;padding:4px 11px;font:700 13px var(--f-body);cursor:pointer}
+.vchip.on{border-color:var(--navy);background:var(--navy);color:#fff}
+.vtypes{font-size:12px;color:var(--muted)}
+.vwho{margin-top:8px;font-size:14px;padding:8px 10px;border-radius:10px;background:color-mix(in srgb,var(--navy) 6%,var(--surface))}
+.vwho small{color:var(--muted)}
+.vwarn{color:var(--warn-red);font-weight:700}
+.vacts{display:flex;gap:8px;justify-content:flex-end;margin-top:8px}
+.vacts button{border:1px solid var(--line);background:var(--surface);color:var(--ink);border-radius:99px;padding:5px 12px;font:700 13px var(--f-body);cursor:pointer}
+.vacts button.dangerl{color:var(--warn-red)}
+.vtabs{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin:4px 0}
+.vtabs>button[data-vtab]{border:1.5px solid var(--line);background:var(--surface);color:var(--muted);border-radius:99px;padding:6px 12px;font:800 14px var(--f-body);cursor:pointer}
+.vtabs>button[data-vtab][aria-pressed="true"]{border-color:var(--navy);background:var(--navy);color:#fff}
+.vper{display:flex;align-items:center;gap:6px;margin-left:auto}
+.vper button{border:1px solid var(--line);background:var(--surface);border-radius:8px;width:32px;height:32px;font:700 16px var(--f-body);cursor:pointer;color:var(--ink)}
+.vcsv{border:1.5px solid #1f8a4c;color:#1f8a4c;background:var(--surface);border-radius:99px;padding:6px 12px;font:800 13px var(--f-body);cursor:pointer}
+.kpis .kpi.vgood b{color:#1f8a4c}

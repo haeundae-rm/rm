@@ -2,8 +2,9 @@
 // 2026-10-31 Firebase 이전 4단계. 데이터 읽기·쓰기는 store.js 한 곳
 import * as S from './store.js';
 import { setupMyWork } from './mywork.js';
+import { setupVoc } from './voc.js';
 
-const APP_VER = '2026.11.07-5';
+const APP_VER = '2026.11.07-6';
 // 관리자 = 보안 규칙 isAdmin 과 같은 목록 (UID 는 공개돼도 되는 값)
 const ADMINS = [
   { uid: 'iw2orXgIgPgTbLUQa0b41XJ9Dvd2', label: '소장', email: 'unieshaeundae+admin@gmail.com' },
@@ -92,7 +93,7 @@ S.onUser(u => {
   if (!u) { S.signInAnon().catch(e => { $('#main').innerHTML = '<div class="notice"><strong>처음 연결하지 못했어요.</strong><br>인터넷을 켜고 앱을 다시 열어 주세요.<br><small>' + esc(errText(e)) + '</small></div>'; }); return; }
   start();
 });
-function stopAll() { subs.concat(meSubs).forEach(f => { try { f(); } catch (e) {} }); subs = []; meSubs = []; }
+function stopAll() { subs.concat(meSubs).forEach(f => { try { f(); } catch (e) {} }); subs = []; meSubs = []; try { VOC.stop(); } catch (e) {} }
 function start() {
   stopAll();
   isAdm = ADMINS.some(a => a.uid === user.uid);
@@ -755,9 +756,11 @@ function renderAdmin() {
     errDocs.slice(0, 10).map(x => '<div class="r"><span><b>' + esc(x.name || '이름 없음') + '</b> · ' + esc(x.where || '') + '<br><small>' + esc(String(x.msg || '').slice(0, 160)) + '</small></span><span>' + hm(x.at) + '</span></div>').join('') + '</div></div>';
   }
   html += '<p class="rec" style="text-align:center">새 앱 ' + APP_VER + '</p>';
+  const ae = document.activeElement, keep = ae && ae.id === 'voctxt' ? { id: ae.id, a: ae.selectionStart, b: ae.selectionEnd, st: ae.scrollTop } : null;   // 글 붙여넣는 중에 화면이 다시 그려져도 커서 유지
   $('#main').innerHTML = html;
+  if (keep) { const el = document.getElementById(keep.id); if (el) { el.focus(); try { el.setSelectionRange(keep.a, keep.b); } catch (e) {} el.scrollTop = keep.st; } }
 }
-function vocHtml() { return '<div class="card"><h3>고객만족도 VOC</h3><p class="rec" style="margin:0">준비 중이에요.</p></div>'; }
+function vocHtml() { return VOC.html(); }
 
 // =====================================================================
 // 저장 (누르는 즉시 휴대폰에 보관 → 서버로. 실패해도 휴대폰에 기억했다가 다시)
@@ -1161,6 +1164,7 @@ async function callOld(fn, args, as) {
   if (!j || !j.ok) throw new Error(j && j.error || '처리하지 못했어요.');
   return j.data;
 }
+const VOC = setupVoc({ S, esc, say, today: () => today, update: () => update(), render: () => { if (isAdm && admTab === 'voc' && !viewMaid && !dlg) { const y = window.scrollY; render(); window.scrollTo(0, y); } }, isAdm: () => isAdm, who: () => (ADMINS.filter(a => user && a.uid === user.uid)[0] || {}).label || '' });
 const MW = setupMyWork({ esc, lsGet, lsSet, toast, vibe, call: callOld, me: () => me, mate: () => mateOf(me), pair: () => { const mt = mateOf(me); return (teamPairs.filter(p => p.indexOf(me) >= 0)[0] || [me, mt]).slice(); }, isAdm: () => isAdm, dlg: () => dlg, setDlg: d => { dlg = d; }, closeDlg: () => closeDlg() });
 
 // =====================================================================
