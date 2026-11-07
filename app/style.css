@@ -487,5 +487,5 @@ body.adm main>.alert{background:var(--red-soft);color:var(--warn-red)}
 .room .no .own{display:block;margin-top:6px;font:700 12px/1 var(--f-body);color:var(--muted);background:color-mix(in srgb,var(--muted) 12%,transparent);border-radius:6px;padding:3px 6px;width:max-content}
 .teamb{display:inline-block;font:800 11px/1 var(--f-body);color:var(--navy);border:1.5px solid var(--navy);border-radius:6px;padding:2px 5px;margin-right:6px;vertical-align:1px}
 .sum .who .each{font-size:13px;color:var(--muted);font-weight:600}
-.names button.teampick small{display:block;font-size:12px;font-weight:600;color:var(--muted);margin-top:4px}
-.names button.teampick{grid-column:span 2}
+.names button.teampick{position:relative;font-size:16px;letter-spacing:-.3px;white-space:nowrap;padding:10px 6px}
+.names button.teampick small{position:absolute;top:-8px;right:8px;font:800 10px/1 var(--f-body);color:#fff;background:var(--navy);border-radius:6px;padding:3px 5px;letter-spacing:0}

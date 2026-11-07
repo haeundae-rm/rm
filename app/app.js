@@ -3,7 +3,7 @@
 import * as S from './store.js';
 import { setupMyWork } from './mywork.js';
 
-const APP_VER = '2026.11.07-1';
+const APP_VER = '2026.11.07-2';
 // 관리자 = 보안 규칙 isAdmin 과 같은 목록 (UID 는 공개돼도 되는 값)
 const ADMINS = [
   { uid: 'iw2orXgIgPgTbLUQa0b41XJ9Dvd2', label: '소장', email: 'unieshaeundae+admin@gmail.com' },
@@ -391,14 +391,14 @@ function pickList() {
     if (!mt) { out.push({ pick: n, label: n }); return; }
     used[mt] = 1;
     const pair = teamPairs.filter(p => p.indexOf(n) >= 0)[0] || [n, mt];
-    out.push({ pick: n, label: pair.join(' · '), team: true });
+    out.push({ pick: n, label: pair.join('·'), team: true });
   });
   return out;
 }
 function renderPicker() {
   if (data.noPlan || !data.maids.length) { $('#main').innerHTML = bands() + instHtml() + '<div class="notice"><strong>오늘 배정은 아직 준비 중이에요.</strong><br>' + esc(data.label) + ' 배정이 올라오면 이름을 고를 수 있어요.</div><button class="adminin" data-admin-in="1">관리자로 보기</button>'; return; }
   $('#main').innerHTML = bands() + instHtml() + '<section class="pick"><h2>본인 이름을 골라 주세요</h2><p><b style="color:var(--ink)">꼭 본인 이름</b>을 눌러 주세요. 한 번 고르면 다음부터는 바로 본인 화면으로 열려요.</p>' +
-    '<div class="names">' + pickList().map(p => '<button data-pick="' + esc(p.pick) + '" data-label="' + esc(p.label) + '"' + (p.team ? ' class="teampick"' : '') + '>' + esc(p.label) + (p.team ? '<small>2인 1조 · 휴대폰 하나</small>' : '') + '</button>').join('') + '</div>' +
+    '<div class="names">' + pickList().map(p => '<button data-pick="' + esc(p.pick) + '" data-label="' + esc(p.label) + '"' + (p.team ? ' class="teampick"' : '') + '>' + esc(p.label) + (p.team ? '<small>2인 1조</small>' : '') + '</button>').join('') + '</div>' +
     '<button class="adminin" data-admin-in="1">관리자로 보기</button></section>';
 }
 function minsOf(t) { const p = String(t).split(':'); return Number(p[0]) * 60 + Number(p[1]); }
