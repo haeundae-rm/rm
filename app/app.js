@@ -4,7 +4,7 @@ import * as S from './store.js';
 import { setupMyWork } from './mywork.js';
 import { setupVoc } from './voc.js';
 
-const APP_VER = '2026.11.07-7';
+const APP_VER = '2026.11.12-1';
 // 관리자 = 보안 규칙 isAdmin 과 같은 목록 (UID 는 공개돼도 되는 값)
 const ADMINS = [
   { uid: 'iw2orXgIgPgTbLUQa0b41XJ9Dvd2', label: '소장', email: 'unieshaeundae+admin@gmail.com' },
@@ -570,9 +570,18 @@ function upPerMaid(rows) {
   const c = {}, o = []; rows.forEach(r => { if (!(r[1] in c)) { c[r[1]] = 0; o.push(r[1]); } c[r[1]] += W(r[2]); });
   return o.map(n => esc(n) + ' ' + c[n]).join(' · ');
 }
+function repDoc(d0, r, who) {
+  const v = x => (x === null || x === undefined ? '' : x);
+  return { date: d0.date, csv: '', kind: 'report', sheet: r.sheet, file: String(d0.file).slice(0, 80), at: S.SERVER_TIME, by: user.uid, who,
+    cards: (r.data.cards || []).map(c => ({ label: String(v(c.label)), name: String(v(c.name)), unit: v(c.unit), actual: v(c.actual) })),
+    rooms: (r.data.rooms || []).map(x => { const o = { room: String(x.room), st: v(x.st) }; if (x.name) o.name = String(x.name); return o; }) };
+}
 function upSend(d0) {
   const r = d0.res, s = r.summary, who = (ADMINS.filter(a => a.uid === user.uid)[0] || {}).label || '';
   busy = true; drawDlg();
+  // 2026-11-12: 정비 지원 '더티 배분 만들기'가 파일 없이 그날 것을 불러오게 카드(메이드·배정수량)·객실(담당·상태)도 날짜별로 남김.
+  //   uploads/rep_{날짜} — 관리자만 읽음(규칙 v3 그대로). 중계는 uploads/latest 만 보니 영향 없음. 실패해도 배정 올리기는 그대로 진행
+  if (r.data) S.set('uploads/rep_' + d0.date, repDoc(d0, r, who)).catch(e => report('정비보고서 저장', String(e && e.message || e)));
   withTimeout(S.set('uploads/latest', { date: d0.date, csv: r.csv, state: 'wait', at: S.SERVER_TIME, by: user.uid, who, file: String(d0.file).slice(0, 80),
     sheet: r.sheet, maids: s.maids, rooms: s.rooms, units: s.units, ok: s.ok }), 20000, '인터넷 연결을 확인하고 다시 눌러 주세요.')
     .then(() => { busy = false; dlg = null; drawDlg(); say(d0.date.slice(5).replace('-', '/') + ' 배정표를 올렸어요. 1~2분 안에 메이드 휴대폰에 들어가요.'); })
