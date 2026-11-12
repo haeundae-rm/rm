@@ -4,9 +4,11 @@
 // 읽기: 열 때 · '새로 고침' · 화면으로 돌아올 때(2분 지난 경우)만 한 번씩 (실시간 구독 안 함 — Firestore 읽기 아끼기)
 // 2단계 (2026-11-13): 📥 정비보고서 올리기 — 정비 레포트 관리자와 같은 계산(engine.js)·같은 저장(uploads/latest + uploads/rep_{날짜})
 //   → 중계가 시트 '배정' 탭·메이드 휴대폰으로, 정비 지원 '더티 배분 만들기'는 파일 없이 불러옴. 정비 레포트 쪽 버튼도 그대로 둠(1~2주 같이 씀)
+// 2단계 ② (2026-11-13): 🛏 더티 배분 만들기 — 정비 지원의 화면 파일(dist.js · distcalc.js)을 그대로 불러와 허브에서 엶 (같은 계산·같은 저장 sup/{날짜})
+//   정비 지원 앱 쪽 버튼도 그대로 둠
 import * as S from '../app/store.js';
 
-const VER = '2026.11.13-1';
+const VER = '2026.11.13-2';
 const ADMINS = [
   { uid: 'iw2orXgIgPgTbLUQa0b41XJ9Dvd2', label: '소장', email: 'unieshaeundae+admin@gmail.com' },
   { uid: 'Fz4T5ZzIxShOdVkNpF9gzMmOLED2', label: '부소장', email: 'unieshaeundae+sub@gmail.com' }
@@ -14,8 +16,8 @@ const ADMINS = [
 const ROYAL = { '3001': 1, '3002': 1, '3101': 1, '3102': 1 };   // 로얄 = 2실 (레포트 앱과 같음)
 const JOBS = ['룸메이드', '정비보조', '미화', '사우나', '하우스맨', '오더테이커', '하우스키퍼', '기타'];
 const LINKS = [
-  { ic: '🧹', t: '정비 레포트', s: '배정 · 정비보고서 올리기 · VOC · 룸메이드 명단', href: '../' },
-  { ic: '🛏', t: '정비 지원', s: '더티 배분 · 객실 활동판 · 정비보조 명단', href: '../../dirty/' },
+  { ic: '🧹', t: '정비 레포트', s: '메이드별 현황 · VOC · 룸메이드 명단', href: '../' },
+  { ic: '🛏', t: '정비 지원', s: '객실 활동판 · 정비보조 명단 · 정비보조 화면', href: '../../dirty/' },
   { ic: '📝', t: '입퇴사 서류', s: '근로계약서 · 입사서류 · 사직서 (별도 비밀번호)', href: '../../unies-contract/' },
   { ic: '📦', t: '재고조사', s: '객실 · 사우나 재고 (부소장)', href: '../../inventory/' }
 ];
@@ -173,7 +175,7 @@ function dirtyHtml(v) {
   else h += '<p class="note" style="margin:0 0 10px">' + (plan.length ? '오늘은 더티 지원 객실이 없어요.' : '오늘 더티 배분이 아직이에요.') + (done ? ' 지금까지 더티 완료 ' + done + '실.' : '') + '</p>';
   h += '<div class="kv"><div><b>' + inNow.length + '</b><span>출근 중</span></div><div><b>' + ws.length + '</b><span>더티 담당</span></div><div><b>' + outN.length + '</b><span>퇴근</span></div></div>';
   if (inNow.length) h += '<p class="note">출근: ' + esc(inNow.join(', ')) + '</p>';
-  return h + '</div>';
+  return h + '<button class="big-btn' + (plan.length ? ' sec' : '') + '" style="margin-top:12px" data-hdist="1">📋 더티 배분 ' + (plan.length ? '다시 만들기' : '만들기') + '</button></div>';
 }
 function actsHtml(v) {
   let h = '<div class="card"><h2>진행 중 활동 <small>객실 활동판</small></h2>';
@@ -264,7 +266,7 @@ function upHtml() {
   if (up.sent) {
     const x = up.sent, d = md(x.date);
     if (x.done === 'done') h += '<p class="okbox">✅ ' + esc(d) + ' 배정표 반영 완료' + (x.msg ? ' · ' + esc(x.msg) : '') + '</p>' +
-      '<a class="big-btn sec linkbtn" href="../../dirty/">🛏 다음: 더티 배분 만들기 (정비 지원)</a>';
+      '<button class="big-btn" data-hdist="1">🛏 다음: 더티 배분 만들기</button>';
     else if (x.done) h += '<p class="err">❌ ' + esc(d) + ' 배정표 반영 실패 · ' + esc(x.msg) + ' — 파일을 확인하고 다시 올려 주세요.</p>';
     else h += '<p class="waitbox">⏳ ' + esc(d) + ' 배정표를 올렸어요. 시트에 넣는 중 (1~2분)…' + (x.slow ? '<br><b>5분 넘게 걸려요 — 위 중계 상태를 확인해 주세요.</b>' : '') + '</p>';
     return h + '<button class="big-btn sec" style="margin-top:10px" data-up="reset">' + (x.done === 'done' ? '다른 파일 올리기' : '닫기') + '</button></div>';
@@ -290,6 +292,73 @@ function upHtml() {
   h += '<div class="btn2"><button class="big-btn sec" data-up="reset">취소</button><button class="big-btn' + (s && !s.ok ? ' danger' : '') + '" data-up="send"' + (!s || up.sending ? ' disabled' : '') + '>' +
     (up.sending ? '올리는 중…' : s && !s.ok ? '그래도 올리기' : '앱에 올리기') + '</button></div>';
   return h + '</div>';
+}
+// ---------- 🛏 더티 배분 만들기 (2단계 ②) — 정비 지원 dist.js 가 쓰는 SupShim.dist · window.plan 을 허브에서 채워 줌
+const distOther = {};
+let distP = null, distWatch = null;
+function loadScript(src) { return new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = src; sc.onload = res; sc.onerror = () => rej(new Error('화면 파일을 못 불러왔어요: ' + src.split('/').pop())); document.head.appendChild(sc); }); }
+// 근태 줄 → { 이름: {in, out, task} } (정비 지원 server.js attReduce_ 와 같은 규칙: 아래 줄이 위 줄을 덮음)
+function attOf(rows) {
+  const out = {};
+  rows.map(x => x.data || {}).filter(x => x.tab === '근태' && Array.isArray(x.row)).sort((a, b) => Number(a.at || 0) - Number(b.at || 0)).forEach(x => {
+    const r = x.row, nm = String(r[2] || '').replace(/\s+/g, ' ').trim(), kind = String(r[3] || '').trim();
+    if (!nm) return;
+    const at = String(r[7] || '').replace(/^'/, '').trim() || hm(x.at);
+    const a = out[nm] = out[nm] || { name: nm, in: '', out: '', task: '', memo: '' };
+    if (kind === '출근') { a.in = at; if (r[4]) { a.task = String(r[4]); a.memo = String(r[5] || ''); } }
+    else if (kind === '퇴근') a.out = at;
+    else if (kind === '퇴근취소') a.out = '';
+    else if (kind === '출근취소') { a.in = ''; a.out = ''; a.task = ''; a.memo = ''; }
+    else if (kind === '업무' && r[4]) { a.task = String(r[4]); a.memo = String(r[5] || ''); }
+  });
+  return out;
+}
+async function openDist() {
+  if (!admin) return;
+  const btns = document.querySelectorAll('[data-hdist]'); btns.forEach(b => { b.disabled = true; b.textContent = '여는 중…'; });
+  try {
+    const d = ymd();
+    const [names, roster, sup, rows] = await Promise.all([safe(S.get('sup_meta/names')), safe(S.get('sup_meta/roster')), safe(S.get('sup/' + d)),
+      view.st && Array.isArray(view.st.rows) ? Promise.resolve(view.st.rows) : safe(S.getQuery('sup/' + d + '/rows', []))]);
+    if (sup && !sup.__err) distOther[d] = sup;
+    const known = () => {
+      const r = roster && !roster.__err ? roster : {}, hide = {}, out = {};
+      (Array.isArray(r.hide) ? r.hide : []).forEach(n => { hide[n] = 1; });
+      ((names && !names.__err && names.names) || []).concat(Array.isArray(r.add) ? r.add : []).forEach(n => { n = String(n || '').trim(); if (n && !hide[n] && n !== '관리자') out[n] = 1; });
+      return Object.keys(out).sort();
+    };
+    const pd = x => (x && Array.isArray(x.plan) && x.plan.length ? x : null);
+    window.plan = { att: attOf(Array.isArray(rows) ? rows : []), workers: [], known: known(), noPlan: !pd(distOther[d]) };
+    window.SupShim = window.SupShim || {};
+    window.SupShim.ver = VER;
+    window.SupShim.dist = {
+      isAdmin: () => !!admin,
+      today: () => ymd(),
+      shift: (x, n) => addDays(x, n),
+      planDoc: x => pd(distOther[x]),
+      fetchPlan: x => S.get('sup/' + x).then(v => { distOther[x] = v; return v; }),
+      fetchReport: x => S.get('uploads/rep_' + x),
+      knownNames: known,
+      getCfg: () => S.get('sup_meta/distcfg'),
+      setCfg: c => S.set('sup_meta/distcfg', { rule: c.rule, at: S.SERVER_TIME, uid: user.uid }),
+      savePlan: (x, plan, meta) => {
+        if (!admin) return Promise.reject(new Error('관리자 로그인이 필요해요'));
+        const sig = 'app:' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+        distOther[x] = { date: x, plan, sig, src: 'app', meta };
+        return S.set('sup/' + x, { date: x, plan, sig, src: 'app', meta, by: admin.label, uid: user.uid, issued: S.SERVER_TIME, at: S.SERVER_TIME });
+      }
+    };
+    if (typeof window.render !== 'function') window.render = function () {};
+    if (!distP) distP = loadScript(new URL('../../dirty/distcalc.js?v=' + VER, import.meta.url).href).then(() => loadScript(new URL('../../dirty/dist.js?v=' + VER, import.meta.url).href));
+    await distP;
+    window.SupDist.open();
+    clearInterval(distWatch);
+    distWatch = setInterval(() => { if (!document.getElementById('dz')) { clearInterval(distWatch); load(true); } }, 700);   // 닫으면 오늘 한눈에 다시 읽기
+  } catch (e) {
+    distP = null;
+    alert('더티 배분 화면을 못 열었어요: ' + (e && e.message || e) + '\n인터넷을 확인하고 다시 눌러 주세요.');
+  }
+  draw();
 }
 function todayHtml() {
   const v = view.st;
@@ -342,8 +411,9 @@ function openStaff() {
 
 // ---------- 누르기
 document.addEventListener('click', e => {
-  const t = e.target.closest && e.target.closest('[data-who],[data-login],[data-ref],[data-staff],[data-logout],[data-up],[data-upd]');
-  if (!t) return;
+  const t = e.target.closest && e.target.closest('[data-who],[data-login],[data-ref],[data-staff],[data-logout],[data-up],[data-upd],[data-hdist]');
+  if (!t || (t.closest && t.closest('#dz'))) return;
+  if (t.hasAttribute('data-hdist')) { openDist(); return; }
   if (t.hasAttribute('data-up')) {
     const a = t.getAttribute('data-up');
     if (a === 'pick') pickXlsx();
