@@ -2,9 +2,11 @@
 // 각 앱(정비 레포트 · 정비 지원 · 입퇴사 서류 · 재고)은 그대로 두고, 관리자 입구 하나 + 오늘 한눈에 + 바로가기 + 전 파트 직원 명단
 // 같은 주소(haeundae-rm.github.io) 아래라 여기서 로그인하면 정비 레포트·정비 지원도 관리자로 열림 (Firebase 로그인 공유)
 // 읽기: 열 때 · '새로 고침' · 화면으로 돌아올 때(2분 지난 경우)만 한 번씩 (실시간 구독 안 함 — Firestore 읽기 아끼기)
+// 2단계 (2026-11-13): 📥 정비보고서 올리기 — 정비 레포트 관리자와 같은 계산(engine.js)·같은 저장(uploads/latest + uploads/rep_{날짜})
+//   → 중계가 시트 '배정' 탭·메이드 휴대폰으로, 정비 지원 '더티 배분 만들기'는 파일 없이 불러옴. 정비 레포트 쪽 버튼도 그대로 둠(1~2주 같이 씀)
 import * as S from '../app/store.js';
 
-const VER = '2026.11.12-1';
+const VER = '2026.11.13-1';
 const ADMINS = [
   { uid: 'iw2orXgIgPgTbLUQa0b41XJ9Dvd2', label: '소장', email: 'unieshaeundae+admin@gmail.com' },
   { uid: 'Fz4T5ZzIxShOdVkNpF9gzMmOLED2', label: '부소장', email: 'unieshaeundae+sub@gmail.com' }
@@ -187,6 +189,108 @@ function actsHtml(v) {
   }).join('');
   return h + '</div>';
 }
+// ---------- 📥 정비보고서 올리기 (2단계, 2026-11-13)
+let up = null, engine = null, upPoll = null;
+const FAST = window.__hubFast ? 0.02 : 1;   // 시험에서만 기다림을 짧게
+const addDays = (d, n) => ymd(Date.parse(d + 'T12:00:00+09:00') + n * 864e5);
+const W = r => (ROYAL[r] ? 2 : 1);
+const withTimeout = (p, ms, msg) => Promise.race([p, new Promise((_, rej) => setTimeout(() => rej(new Error(msg)), ms))]);
+function upDefaultDate() { return seoul().toISOString().slice(11, 16) >= '15:00' ? addDays(ymd(), 1) : ymd(); }
+function pickXlsx() {
+  const inp = document.createElement('input');
+  inp.type = 'file'; inp.accept = '.xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'; inp.style.display = 'none';
+  inp.addEventListener('change', () => {
+    const f = inp.files && inp.files[0]; inp.remove();
+    if (!f) return;
+    up = { file: f.name, date: upDefaultDate(), res: null, err: '', busy: true, buf: null };
+    draw(); scrollUp();
+    f.arrayBuffer().then(buf => { if (up && up.file === f.name) { up.buf = buf; return upBuild(); } })
+      .catch(e => { if (up) { up.busy = false; up.err = '파일을 읽지 못했어요: ' + (e && e.message || e); draw(); } });
+  });
+  document.body.appendChild(inp); inp.click();
+}
+async function upBuild() {
+  const u0 = up; u0.busy = true; u0.res = null; u0.err = ''; draw();
+  try {
+    if (typeof DecompressionStream === 'undefined') throw new Error('이 브라우저는 엑셀 읽기를 지원하지 않아요. PC 크롬이나 최신 휴대폰에서 해 주세요.');
+    if (!engine) engine = await import(new URL('../app/engine.js?v=' + VER, import.meta.url).href);
+    const res = await engine.buildFromXlsx(u0.buf, u0.date);
+    if (up === u0) u0.res = res;
+  } catch (e) { if (up === u0) u0.err = String(e && e.message || e); }
+  u0.busy = false; if (up === u0) draw();
+}
+function repDoc(u0, r) {
+  const v = x => (x === null || x === undefined ? '' : x);
+  return { date: u0.date, csv: '', kind: 'report', sheet: r.sheet, file: String(u0.file).slice(0, 80), at: S.SERVER_TIME, by: user.uid, who: admin.label,
+    cards: (r.data.cards || []).map(c => ({ label: String(v(c.label)), name: String(v(c.name)), unit: v(c.unit), actual: v(c.actual) })),
+    rooms: (r.data.rooms || []).map(x => { const o = { room: String(x.room), st: v(x.st) }; if (x.name) o.name = String(x.name); return o; }) };
+}
+function upSend() {
+  const u0 = up, r = u0 && u0.res, s = r && r.summary;
+  if (!s || u0.sending) return;
+  if (!s.ok && !confirm('검증에서 다른 점이 있어요. 그래도 올릴까요?')) return;
+  u0.sending = true; u0.err = ''; draw();
+  if (r.data) S.set('uploads/rep_' + u0.date, repDoc(u0, r)).catch(() => {});   // 정비 지원 더티 배분용 (실패해도 배정 올리기는 그대로)
+  withTimeout(S.set('uploads/latest', { date: u0.date, csv: r.csv, state: 'wait', at: S.SERVER_TIME, by: user.uid, who: admin.label, file: String(u0.file).slice(0, 80),
+    sheet: r.sheet, maids: s.maids, rooms: s.rooms, units: s.units, ok: s.ok }), 20000, '인터넷 연결을 확인하고 다시 눌러 주세요.')
+    .then(() => { up = { sent: { date: u0.date, at: Date.now() } }; draw(); watchUp(); },
+      e => { if (up === u0) { u0.sending = false; u0.err = '올리지 못했어요: ' + (e && (e.code || e.message) || e); draw(); } });
+}
+// 올린 뒤: 중계가 끝날 때까지 uploads/latest 문서 하나만 20초마다 다시 읽음 (최대 5분)
+function watchUp() {
+  clearTimeout(upPoll);
+  const t0 = Date.now();
+  const tick = async () => {
+    if (!up || !up.sent) return;
+    const u = await safe(S.get('uploads/latest'));
+    if (u && !u.__err && view.st) view.st.up = u;
+    if (u && !u.__err && u.date === up.sent.date && u.state && u.state !== 'wait') { up.sent.done = u.state; up.sent.msg = u.msg || ''; draw(); load(true); return; }
+    draw();
+    if (Date.now() - t0 < 5 * 60000 * FAST) upPoll = setTimeout(tick, 20000 * FAST); else { up.sent.slow = true; draw(); }
+  };
+  upPoll = setTimeout(tick, 15000 * FAST);
+}
+function scrollUp() { setTimeout(() => { const el = document.getElementById('upcard'); if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' }); }, 50); }
+function upPerMaid(rows) {
+  const c = {}, o = []; rows.forEach(r => { if (!(r[1] in c)) { c[r[1]] = 0; o.push(r[1]); } c[r[1]] += W(r[2]); });
+  return o.map(n => esc(n) + ' ' + c[n]).join(' · ');
+}
+function upHtml() {
+  let h = '<div class="card" id="upcard"><h2>📥 정비보고서 올리기 <small>메이드 배정 · 더티 배분 자료 한 번에</small></h2>';
+  if (!up) {
+    return h + '<button class="big-btn" data-up="pick">정비보고서 파일 고르기</button>' +
+      '<p class="note">엑셀(.xlsx)을 고르면 이 기기에서 배정표를 만들어 확인 화면을 보여 줘요. 올리면 1~2분 안에 메이드 휴대폰에 들어가고, 정비 지원 더티 배분은 파일 없이 불러와요.</p></div>';
+  }
+  if (up.sent) {
+    const x = up.sent, d = md(x.date);
+    if (x.done === 'done') h += '<p class="okbox">✅ ' + esc(d) + ' 배정표 반영 완료' + (x.msg ? ' · ' + esc(x.msg) : '') + '</p>' +
+      '<a class="big-btn sec linkbtn" href="../../dirty/">🛏 다음: 더티 배분 만들기 (정비 지원)</a>';
+    else if (x.done) h += '<p class="err">❌ ' + esc(d) + ' 배정표 반영 실패 · ' + esc(x.msg) + ' — 파일을 확인하고 다시 올려 주세요.</p>';
+    else h += '<p class="waitbox">⏳ ' + esc(d) + ' 배정표를 올렸어요. 시트에 넣는 중 (1~2분)…' + (x.slow ? '<br><b>5분 넘게 걸려요 — 위 중계 상태를 확인해 주세요.</b>' : '') + '</p>';
+    return h + '<button class="big-btn sec" style="margin-top:10px" data-up="reset">' + (x.done === 'done' ? '다른 파일 올리기' : '닫기') + '</button></div>';
+  }
+  const r = up.res, s = r && r.summary, t0 = ymd(), t1 = addDays(t0, 1), v = view.st || {};
+  h += '<p class="note" style="margin:0 0 8px">📄 ' + esc(up.file) + '</p><div class="seg2">' +
+    [[t0, '오늘'], [t1, '내일']].map(([d, l]) => '<button data-upd="' + d + '" aria-pressed="' + (up.date === d) + '">' + l + ' ' + md(d) + '</button>').join('') + '</div>';
+  if (up.busy) h += '<p class="note">엑셀을 읽는 중…</p>';
+  if (up.err) h += '<p class="err" style="margin-top:10px">' + esc(up.err) + '</p>';
+  if (s) {
+    h += '<div class="upsum"><p><b>' + esc(r.sheet) + '일 시트</b> · 메이드 <b>' + s.maids + '명</b> · 객실 <b>' + s.rooms + '개</b> = ' + s.units + '실 (로얄 2실)</p>' +
+      '<ul class="upchk">' + s.checks.map(c => '<li class="' + (c.ok ? 'ok' : 'no') + '">' + (c.ok ? '✅ ' : '❌ ') + esc(c.msg) + '</li>').join('') + '</ul>' +
+      '<p class="note">' + Object.keys(s.tags).sort((a, b) => s.tags[b] - s.tags[a]).map(k => esc(k) + ' ' + s.tags[k]).join(' · ') + '</p>' +
+      (s.groups.length ? '<p class="note">단체: ' + s.groups.map(g => esc(g.name) + '(' + g.rooms + '실' + (g.time ? ', 입실 ' + esc(g.time) : '') + ')').join(' / ') + '</p>' : '') +
+      (s.due.length ? '<p class="note">시간 지정: ' + s.due.map(x => esc(x.room) + '(' + esc(x.maid) + ') ' + esc(x.due)).join(', ') + '</p>' : '') +
+      '<details><summary>메이드별 객실 수</summary><p class="note">' + upPerMaid(r.rows) + '</p></details></div>';
+    if (!s.ok) h += '<div class="warnbox"><b>검증에서 다른 점이 있어요.</b> 정비보고서를 확인하고 고친 뒤 다시 올리는 게 좋아요.</div>';
+    const nrec = Array.isArray(v.recs) ? v.recs.filter(x => x.data && (x.data.status === '완료' || x.data.status === '이상')).length : 0;
+    if (up.date === t0 && nrec) h += '<div class="warnbox">오늘 이미 완료 기록이 ' + nrec + '건 있어요. 배정이 바뀌어도 <b>완료 기록은 그대로</b> 남아요.</div>';
+    const u = v.up && !v.up.__err ? v.up : null;
+    if (u && u.date === up.date && u.state === 'done') h += '<p class="note">' + esc(md(up.date)) + ' 배정표는 ' + esc(hm(u.doneAt)) + '에 이미 올렸어요' + (u.who ? ' (' + esc(u.who) + ')' : '') + '. 올리면 새 파일로 바뀌어요.</p>';
+  }
+  h += '<div class="btn2"><button class="big-btn sec" data-up="reset">취소</button><button class="big-btn' + (s && !s.ok ? ' danger' : '') + '" data-up="send"' + (!s || up.sending ? ' disabled' : '') + '>' +
+    (up.sending ? '올리는 중…' : s && !s.ok ? '그래도 올리기' : '앱에 올리기') + '</button></div>';
+  return h + '</div>';
+}
 function todayHtml() {
   const v = view.st;
   let h = '<div class="card"><h2>오늘 한눈에 <button class="ref" data-ref="1">' + (view.busy ? '읽는 중…' : '↻ 새로 고침') + '</button></h2>';
@@ -196,6 +300,7 @@ function todayHtml() {
     (!nb && !nw ? '<span class="pill ok">모두 정상</span>' : '') + '<span class="pill" style="background:var(--tile);color:var(--muted)">' + hm(view.at) + ' 기준</span></div>';
   h += '<ul class="st">' + L.sort((a, b) => ({ bad: 0, wait: 1, ok: 2 }[a.lv] - { bad: 0, wait: 1, ok: 2 }[b.lv])).map(x =>
     '<li class="' + x.lv + '"><span style="font-size:17px;color:inherit">' + (x.lv === 'bad' ? '❗' : x.lv === 'wait' ? '⏳' : '✅') + '</span><div><b>' + esc(x.title) + '</b>' + (x.sub ? '<span>' + esc(x.sub) + '</span>' : '') + '</div></li>').join('') + '</ul></div>';
+  h += upHtml();
   const p = progress(v);
   h += '<div class="card"><h2>오늘 정비 진행 <small>' + (p.last ? '마지막 완료 ' + hm(p.last) : '') + '</small></h2>';
   if (p.err) h += '<p class="err">완료 기록을 못 읽었어요: ' + esc(p.err) + '</p>';
@@ -237,8 +342,16 @@ function openStaff() {
 
 // ---------- 누르기
 document.addEventListener('click', e => {
-  const t = e.target.closest && e.target.closest('[data-who],[data-login],[data-ref],[data-staff],[data-logout]');
+  const t = e.target.closest && e.target.closest('[data-who],[data-login],[data-ref],[data-staff],[data-logout],[data-up],[data-upd]');
   if (!t) return;
+  if (t.hasAttribute('data-up')) {
+    const a = t.getAttribute('data-up');
+    if (a === 'pick') pickXlsx();
+    else if (a === 'send') upSend();
+    else if (a === 'reset') { clearTimeout(upPoll); up = null; draw(); }
+    return;
+  }
+  if (t.hasAttribute('data-upd')) { if (up && !up.sent && !up.sending) { up.date = t.getAttribute('data-upd'); if (up.buf) upBuild(); else draw(); } return; }
   if (t.hasAttribute('data-who')) { const pw = ($('#pw') || {}).value || ''; login.who = Number(t.getAttribute('data-who')); draw(); const el = $('#pw'); if (el) { el.value = pw; el.focus(); } return; }
   if (t.hasAttribute('data-login')) { doLogin(); return; }
   if (t.hasAttribute('data-ref')) { load(true); return; }

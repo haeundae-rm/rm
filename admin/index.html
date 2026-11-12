@@ -68,6 +68,19 @@ main{max-width:760px;margin:0 auto;padding:14px 16px 60px}
 .err{color:var(--warn);font-weight:700;font-size:14px;margin:0 0 10px}
 .foot{text-align:center;font-size:12.5px;color:var(--muted);margin-top:18px}
 .foot button{border:0;background:none;color:var(--brand);text-decoration:underline;font:700 13px inherit;cursor:pointer}
+.seg2{display:flex;border:1.5px solid var(--line);border-radius:12px;overflow:hidden}
+.seg2 button{flex:1;min-height:46px;border:0;background:transparent;color:var(--ink);font:700 15px inherit;cursor:pointer}
+.seg2 button[aria-pressed="true"]{background:var(--brand);color:#fff}
+.upsum{margin:12px 0 4px;font-size:15px;line-height:1.55}.upsum p{margin:4px 0}
+.upchk{list-style:none;margin:6px 0;padding:0;font-size:14px}.upchk li{padding:2px 0}.upchk li.no{color:var(--warn);font-weight:700}
+.upsum details{margin-top:6px;font-size:14px}.upsum summary{cursor:pointer;color:var(--muted)}
+.warnbox{background:var(--warn-soft);border:1.5px solid var(--warn);border-radius:12px;padding:10px 12px;margin:10px 0;font-size:14.5px;line-height:1.5}.warnbox b{color:var(--warn)}
+.okbox{background:var(--ok-soft);color:var(--ok);border-radius:12px;padding:12px;font-weight:700;margin:0 0 10px}
+.waitbox{background:var(--wait-soft);color:var(--wait);border-radius:12px;padding:12px;font-weight:700;margin:0}
+#upcard{scroll-margin-top:84px}
+.btn2{display:flex;gap:8px;margin-top:12px}.btn2 .big-btn{flex:1}
+.big-btn.danger{background:var(--warn)}.big-btn[disabled]{opacity:.5}
+.linkbtn{display:flex;align-items:center;justify-content:center;text-decoration:none}
 @media (max-width:360px){.go-grid{grid-template-columns:1fr}.kv{grid-template-columns:1fr 1fr}}
 </style>
 </head>
@@ -75,7 +88,7 @@ main{max-width:760px;margin:0 auto;padding:14px 16px 60px}
 <header class="top"><div class="top-in"><div><h1>객실 통합 관리</h1><div class="sub" id="today"></div></div><span class="who" id="who" hidden></span></div></header>
 <main id="main"><div class="card"><p class="note" style="margin:0">여는 중…</p></div></main>
 <noscript><div class="card">이 화면은 자바스크립트가 켜져 있어야 해요.</div></noscript>
-<script type="module" src="hub.js?v=2026.11.12-1"></script>
+<script type="module" src="hub.js?v=2026.11.13-1"></script>
 <script>if ('serviceWorker' in navigator) { window.addEventListener('load', function () { navigator.serviceWorker.register('sw.js').catch(function () {}); }); }</script>
 </body>
 </html>
