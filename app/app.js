@@ -4,7 +4,7 @@ import * as S from './store.js';
 import { setupMyWork } from './mywork.js';
 import { setupVoc } from './voc.js';
 
-const APP_VER = '2026.11.12-1';
+const APP_VER = '2026.11.12-2';
 // 관리자 = 보안 규칙 isAdmin 과 같은 목록 (UID 는 공개돼도 되는 값)
 const ADMINS = [
   { uid: 'iw2orXgIgPgTbLUQa0b41XJ9Dvd2', label: '소장', email: 'unieshaeundae+admin@gmail.com' },
@@ -669,7 +669,7 @@ function adminView(n) {
 }
 // 관리자 화면 = 메뉴(탭) 4개: 오늘 현황 · 배정 · VOC · 설정 (2026-11-07). 문제는 맨 위 빨간 띠로만
 let admTab = (() => { try { return localStorage.getItem('rm_admtab') || 'today'; } catch (e) { return 'today'; } })(), mgSort = 'order';
-const ADM_TABS = [['today', '오늘 현황'], ['assign', '배정'], ['voc', 'VOC'], ['set', '설정']];
+const ADM_TABS = [['today', '오늘 현황'], ['assign', '배정'], ['voc', 'VOC'], ['staff', '명단'], ['set', '설정']];
 function admAlerts() {
   const out = [];
   if (data.noPlan) out.push('<button class="aal" data-atab="assign">⚠ 오늘 배정이 아직 앱에 없어요 · <b>배정 → 정비보고서 올리기</b></button>');
@@ -741,6 +741,10 @@ function renderAdmin() {
     }
   } else if (admTab === 'voc') {
     html += vocHtml();
+  } else if (admTab === 'staff') {
+    html += '<div class="card"><h3>👥 룸메이드 명단</h3><p class="rec" style="margin:0 0 8px">입사일 · 근속 · 등급 · 재직/퇴사를 관리해요. 룸메이드로 새로 입사하는 분은 입퇴사 서류 앱에서 자동으로 들어와요 (1시간마다). ' +
+      '기존 직원과 본사 입사일 자료는 「엑셀 붙여넣기」로 한 번에 넣을 수 있어요.</p><div class="acts"><button class="go" data-staffopen="1">명단 열기</button></div>' +
+      '<p class="rec" style="margin:8px 0 0">정비보조 명단은 정비 지원 앱 관리자 화면에서 관리해요. 명단은 열 때 한 번만 읽어요.</p></div>';
   } else {
     html += '<div class="card"><h3>공지 · 연차 관리</h3><p class="rec" style="margin:0 0 6px">공지 올리기·연차 승인은 아직 기존 앱에서 해요.</p><div class="acts"><a class="go" style="text-decoration:none;text-align:center" href="' + OLD_APP + '" target="_blank" rel="noopener">📢 공지 · 📋 연차 관리 열기</a></div></div>';
   if (nts.length) html += '<div class="card"><h3>공지 확인</h3><div class="list">' + nts.map(n => {
@@ -1056,6 +1060,7 @@ document.addEventListener('click', e => {
   const pk = at('[data-pick]'); if (pk) { dlg = { kind: 'claim', name: pk.getAttribute('data-pick'), label: pk.getAttribute('data-label') || pk.getAttribute('data-pick') }; drawDlg(); return; }
   if (at('[data-admin-in]')) { dlg = { kind: 'login', who: 0, pw: '' }; drawDlg(); return; }
   if (at('[data-admin-off]')) { S.signOut(); return; }
+  if (at('[data-staffopen]') && isAdm) { openStaff(); return; }
   const atb = at('[data-atab]'); if (atb && isAdm) { admTab = atb.getAttribute('data-atab'); try { localStorage.setItem('rm_admtab', admTab); } catch (e) {} viewMaid = null; render(); window.scrollTo(0, 0); return; }
   const mgs = at('[data-mgsort]'); if (mgs && isAdm) { mgSort = mgs.getAttribute('data-mgsort'); render(); return; }
   if (at('[data-upload]')) { pickXlsx(); return; }
@@ -1172,6 +1177,19 @@ async function callOld(fn, args, as) {
   try { j = await r.json(); } catch (e) { throw new Error('서버 응답을 읽지 못했어요. 잠시 후 다시 해 주세요.'); }
   if (!j || !j.ok) throw new Error(j && j.error || '처리하지 못했어요.');
   return j.data;
+}
+// ---------- 룸메이드 명단 (2026-11-12, 직원 명단 staff — 관리자만): 화면 파일은 처음 열 때만 받음 (메이드 휴대폰은 안 받음)
+function openStaff() {
+  const go = () => window.StaffBook.open({ job: '룸메이드', title: '👥 룸메이드 명단', gradeHint: '예: S+20, S, A, B, 신규',
+    api: { list: () => S.getQuery('staff', [['job', '==', '룸메이드']]).then(xs => xs.map(x => Object.assign({}, x.data, { id: x.id }))),
+      save: (id, d) => { const o = {}; Object.keys(d).forEach(k => { if (k !== 'id' && d[k] !== undefined) o[k] = d[k]; }); o.at = S.SERVER_TIME; o.uid = user.uid; return S.set('staff/' + id, o); },
+      del: id => S.del('staff/' + id),
+      newId: () => 'm' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6) } });
+  if (window.StaffBook) { go(); return; }
+  const sc = document.createElement('script');
+  sc.src = new URL('staff.js?v=' + APP_VER, import.meta.url).href;
+  sc.onload = go; sc.onerror = () => say('명단 화면을 못 불러왔어요. 인터넷을 확인하고 다시 눌러 주세요.');
+  document.head.appendChild(sc);
 }
 const VOC = setupVoc({ S, esc, say, today: () => today, update: () => update(), render: () => { if (isAdm && admTab === 'voc' && !viewMaid && !dlg) { const y = window.scrollY; render(); window.scrollTo(0, y); } }, isAdm: () => isAdm, who: () => (ADMINS.filter(a => user && a.uid === user.uid)[0] || {}).label || '' });
 const MW = setupMyWork({ esc, lsGet, lsSet, toast, vibe, call: callOld, me: () => me, mate: () => mateOf(me), pair: () => { const mt = mateOf(me); return (teamPairs.filter(p => p.indexOf(me) >= 0)[0] || [me, mt]).slice(); }, isAdm: () => isAdm, dlg: () => dlg, setDlg: d => { dlg = d; }, closeDlg: () => closeDlg() });
