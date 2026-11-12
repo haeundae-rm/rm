@@ -6,9 +6,10 @@
 //   → 중계가 시트 '배정' 탭·메이드 휴대폰으로, 정비 지원 '더티 배분 만들기'는 파일 없이 불러옴. 정비 레포트 쪽 버튼도 그대로 둠(1~2주 같이 씀)
 // 2단계 ② (2026-11-13): 🛏 더티 배분 만들기 — 정비 지원의 화면 파일(dist.js · distcalc.js)을 그대로 불러와 허브에서 엶 (같은 계산·같은 저장 sup/{날짜})
 //   정비 지원 앱 쪽 버튼도 그대로 둠
+// 2단계 ③ (2026-11-13): 📣 고객만족도 VOC — 정비 레포트 voc.js 를 그대로 불러와 허브 전체 화면에서 씀 (같은 voc/{id} 문서). 열려 있는 동안만 voc 구독
 import * as S from '../app/store.js';
 
-const VER = '2026.11.13-2';
+const VER = '2026.11.13-3';
 const ADMINS = [
   { uid: 'iw2orXgIgPgTbLUQa0b41XJ9Dvd2', label: '소장', email: 'unieshaeundae+admin@gmail.com' },
   { uid: 'Fz4T5ZzIxShOdVkNpF9gzMmOLED2', label: '부소장', email: 'unieshaeundae+sub@gmail.com' }
@@ -16,7 +17,7 @@ const ADMINS = [
 const ROYAL = { '3001': 1, '3002': 1, '3101': 1, '3102': 1 };   // 로얄 = 2실 (레포트 앱과 같음)
 const JOBS = ['룸메이드', '정비보조', '미화', '사우나', '하우스맨', '오더테이커', '하우스키퍼', '기타'];
 const LINKS = [
-  { ic: '🧹', t: '정비 레포트', s: '메이드별 현황 · VOC · 룸메이드 명단', href: '../' },
+  { ic: '🧹', t: '정비 레포트', s: '메이드별 현황 · 룸메이드 명단 · 메이드 화면', href: '../' },
   { ic: '🛏', t: '정비 지원', s: '객실 활동판 · 정비보조 명단 · 정비보조 화면', href: '../../dirty/' },
   { ic: '📝', t: '입퇴사 서류', s: '근로계약서 · 입사서류 · 사직서 (별도 비밀번호)', href: '../../unies-contract/' },
   { ic: '📦', t: '재고조사', s: '객실 · 사우나 재고 (부소장)', href: '../../inventory/' }
@@ -360,6 +361,44 @@ async function openDist() {
   }
   draw();
 }
+// ---------- 📣 고객만족도 VOC (2단계 ③)
+let VOC = null, vocOpen = false, vocToast = null;
+function vocSay(msg) {
+  let t = document.getElementById('vptoast');
+  if (!t) { t = document.createElement('div'); t.id = 'vptoast'; t.className = 'vp-toast'; document.body.appendChild(t); }
+  t.textContent = msg; t.hidden = false; clearTimeout(vocToast); vocToast = setTimeout(() => { t.hidden = true; }, 3500);
+}
+function vocDraw() {
+  const box = document.getElementById('vocin'); if (!box || !vocOpen || !VOC) return;
+  const sc = document.getElementById('vp'), y = sc ? sc.scrollTop : 0;
+  const ae = document.activeElement, keep = ae && ae.id === 'voctxt' ? { a: ae.selectionStart, b: ae.selectionEnd, st: ae.scrollTop } : null;   // 글 붙여넣는 중에 다시 그려져도 커서 유지
+  box.innerHTML = VOC.html();
+  if (sc) sc.scrollTop = y;
+  if (keep) { const el = document.getElementById('voctxt'); if (el) { el.focus(); try { el.setSelectionRange(keep.a, keep.b); } catch (e) {} el.scrollTop = keep.st; } }
+}
+async function openVoc() {
+  if (!admin) return;
+  try {
+    if (!VOC) {
+      const m = await import(new URL('../app/voc.js?v=' + VER, import.meta.url).href);
+      VOC = m.setupVoc({ S, esc, say: vocSay, today: () => ymd(), update: vocDraw, render: vocDraw, isAdm: () => !!admin && vocOpen, who: () => (admin ? admin.label : '') });
+    }
+  } catch (e) { alert('VOC 화면을 못 불러왔어요: ' + (e && e.message || e)); return; }
+  vocOpen = true;
+  const p = document.createElement('div'); p.className = 'vp'; p.id = 'vp';
+  p.innerHTML = '<div class="vp-in"><div class="vp-head"><h2>📣 고객만족도 VOC</h2><button class="vp-x" data-vclose="1" aria-label="닫기">✕</button></div><div id="vocin"></div></div>';
+  document.body.appendChild(p); document.body.classList.add('sb-lock');
+  vocDraw();
+}
+function closeVoc() {
+  vocOpen = false;
+  try { VOC && VOC.stop(); } catch (e) {}   // 닫으면 voc 구독도 끊음 (읽기 아끼기)
+  const p = document.getElementById('vp'); if (p) p.remove(); document.body.classList.remove('sb-lock');
+}
+function vocCardHtml() {
+  return '<div class="card"><h2>📣 고객만족도 VOC</h2><p class="note" style="margin:0 0 12px">카톡으로 받은 고객만족도 공유 글을 붙여넣으면 건별로 나누고 마지막 정비자를 찾아 메이드별 칭찬·불만 누계를 내요. 정비 레포트 VOC 메뉴와 같은 자료예요.</p>' +
+    '<button class="big-btn" data-voc="1">VOC 열기</button></div>';
+}
 function todayHtml() {
   const v = view.st;
   let h = '<div class="card"><h2>오늘 한눈에 <button class="ref" data-ref="1">' + (view.busy ? '읽는 중…' : '↻ 새로 고침') + '</button></h2>';
@@ -391,7 +430,7 @@ function draw() {
   head();
   if (user === null) { $('#main').innerHTML = '<div class="card"><p class="note" style="margin:0">여는 중…</p></div>'; return; }
   if (!admin) { $('#main').innerHTML = loginHtml(); return; }
-  $('#main').innerHTML = todayHtml() + linksHtml() + staffHtml() +
+  $('#main').innerHTML = todayHtml() + vocCardHtml() + linksHtml() + staffHtml() +
     '<div class="foot">객실 통합 관리 ' + VER + ' · <button data-logout="1">로그아웃</button></div>';
 }
 
@@ -411,8 +450,10 @@ function openStaff() {
 
 // ---------- 누르기
 document.addEventListener('click', e => {
-  const t = e.target.closest && e.target.closest('[data-who],[data-login],[data-ref],[data-staff],[data-logout],[data-up],[data-upd],[data-hdist]');
+  const t = e.target.closest && e.target.closest('[data-who],[data-login],[data-ref],[data-staff],[data-logout],[data-up],[data-upd],[data-hdist],[data-voc],[data-vclose]');
   if (!t || (t.closest && t.closest('#dz'))) return;
+  if (t.hasAttribute('data-voc')) { openVoc(); return; }
+  if (t.hasAttribute('data-vclose')) { closeVoc(); load(false); return; }
   if (t.hasAttribute('data-hdist')) { openDist(); return; }
   if (t.hasAttribute('data-up')) {
     const a = t.getAttribute('data-up');
@@ -435,6 +476,7 @@ document.addEventListener('keydown', e => { if (e.key === 'Enter' && e.target &&
 document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') load(false); });
 
 S.onUser(u => {
+  if (vocOpen && !(u && !u.anon)) closeVoc();
   user = u || false;
   admin = u && !u.anon ? ADMINS.filter(a => a.uid === u.uid)[0] || null : null;
   view = { st: null, busy: false, err: '', at: 0 };
