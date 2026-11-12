@@ -1,6 +1,7 @@
 /* 직원 명단 화면 (2026-11-12, 객실 통합 관리 1단계) — 정비 레포트(룸메이드) · 정비 지원(정비보조) 두 앱이 같은 파일을 씀
  * 데이터는 하나: Firestore staff/{id} — 이름·직종·등급·근무조·입사일·퇴사일·상태 + 출처(입퇴사 앱 / 직접)
  * 화면은 앱마다 자기 직종만: StaffBook.open({ job:'룸메이드', title, api:{list,save,del,newId}, extra, onChange })
+ *   관리자 허브(객실 통합 관리)는 전 파트: StaffBook.open({ jobs:['룸메이드','정비보조',…], … }) → 위에 파트 칩, 추가·붙여넣기에 직종
  *   - 레포트 앱 = 룸메이드, 정비 지원 앱 = 정비보조. 미화·사우나·하우스맨·오더테이커는 데이터만 쌓이고 (나중에 통합 관리 앱에서 같이 봄)
  * 새 입사자는 입퇴사 앱(HrStaff.gs)이 1시간마다 보내 줌. 기존 직원·본사 입사일 자료는 '엑셀 붙여넣기'
  * 읽기는 화면을 열 때 한 번 (실시간 구독 안 함). 읽기·쓰기 모두 관리자만 (규칙 v11)
@@ -42,12 +43,13 @@
     return (Math.floor(mo / 12) ? Math.floor(mo / 12) + '년 ' : '') + (mo % 12) + '개월';
   }
   function stateOf(p) { return p.status || '재직'; }
-  function mine(p) { return (p.job || '') === C.job; }
+  function mine(p) { return C.jobs ? true : (p.job || '') === C.job; }
+  function inPart(p) { return !C.jobs || !F.part || (p.job || '미정') === F.part; }
 
   // ---------- 열기 · 닫기
   function open(cfg) {
     C = cfg; close(true);
-    F = { list: null, all: null, err: '', loading: true, tab: '재직', q: '', edit: null, paste: null, saving: false, msg: '' };
+    F = { list: null, all: null, err: '', loading: true, tab: '재직', part: cfg.part || '', q: '', edit: null, paste: null, saving: false, msg: '' };
     var box = document.createElement('div'); box.className = 'sb'; box.id = 'sb'; document.body.appendChild(box);
     document.body.classList.add('sb-lock');
     draw(); load();
@@ -83,13 +85,20 @@
     var h = F.msg ? '<p class="sb-ok">' + esc(F.msg) + '</p>' : '';
     if (F.err) return h + '<section class="sb-sec"><p class="sb-err">' + esc(F.err) + '</p><button class="sb-link" data-sb="reload">다시 읽기</button>' + (C.errExtra ? C.errExtra() : '') + '</section>';
     if (F.loading && !F.list) return h + '<section class="sb-sec"><p class="sb-tip">명단을 읽는 중…</p></section>';
-    var all = F.list, cnt = { '전체': all.length };
+    var parts = '';
+    if (C.jobs) {
+      var pc = {}; F.list.forEach(function (p) { if (stateOf(p) === '퇴사') return; var j = p.job || '미정'; pc[j] = (pc[j] || 0) + 1; });
+      var names = C.jobs.concat(Object.keys(pc).filter(function (j) { return C.jobs.indexOf(j) < 0; }));
+      parts = '<div class="sb-parts"><button data-sb="part" data-v="" aria-pressed="' + (!F.part) + '">전 파트<b>' + F.list.filter(function (p) { return stateOf(p) !== '퇴사'; }).length + '</b></button>' +
+        names.map(function (j) { return '<button data-sb="part" data-v="' + esc(j) + '" aria-pressed="' + (F.part === j) + '">' + esc(j) + '<b>' + (pc[j] || 0) + '</b></button>'; }).join('') + '</div>';
+    }
+    var all = F.list.filter(inPart), cnt = { '전체': all.length };
     STATES.forEach(function (s) { cnt[s] = 0; });
     all.forEach(function (p) { cnt[stateOf(p)] = (cnt[stateOf(p)] || 0) + 1; });
     var q = key(F.q);
     var rows = all.filter(function (p) { return (F.tab === '전체' || stateOf(p) === F.tab) && (!q || key(p.name).indexOf(q) >= 0); });
     var noHire = all.filter(function (p) { return stateOf(p) !== '퇴사' && !p.hired; }).length;
-    h += '<section class="sb-sec"><div class="sb-seg">' + ['재직', '입사 진행', '퇴사', '전체'].map(function (s) {
+    h += '<section class="sb-sec">' + (parts ? parts + '<p class="sb-tip" style="margin:0 0 8px">파트 숫자 = 재직·입사 진행 인원</p>' : '') + '<div class="sb-seg">' + ['재직', '입사 진행', '퇴사', '전체'].map(function (s) {
       return '<button data-sb="tab" data-v="' + s + '" aria-pressed="' + (F.tab === s) + '">' + s + '<b>' + (cnt[s] || 0) + '</b></button>';
     }).join('') + '</div>' +
       '<input class="sb-in1" data-sb="q" placeholder="이름 찾기" value="' + esc(F.q) + '" inputmode="search">' +
@@ -100,11 +109,11 @@
       var st = stateOf(p), t = tenure(p);
       return '<button class="sb-row' + (st === '퇴사' ? ' out' : '') + '" data-sb="edit" data-v="' + esc(p.id) + '">' +
         '<span class="sb-n"><b>' + esc(p.name) + '</b>' + (p.src === 'hr' ? '<em title="입퇴사 서류 앱에서 옴">앱</em>' : '') + '</span>' +
-        '<span class="sb-j">' + esc([p.grade, p.shift].filter(Boolean).join(' · ') || ' ') + '</span>' +
+        '<span class="sb-j">' + esc([C.jobs && !F.part ? p.job || '직종 미정' : '', p.grade, p.shift].filter(Boolean).join(' · ') || ' ') + '</span>' +
         '<span class="sb-d">' + (p.hired ? md(p.hired) + ' 입사' + (t ? '<br>' + t : '') : '<i>입사일 없음</i>') + (p.left ? '<br>' + md(p.left) + ' 퇴사' : '') + '</span></button>';
     }).join('') : '<p class="sb-tip">' + (all.length ? '조건에 맞는 분이 없어요.' : '아직 명단이 비어 있어요. 「엑셀 붙여넣기」로 한 번에 넣거나 「＋ 한 명 추가」를 눌러 주세요.') + '</p>') + '</section>';
     h += '<div class="sb-acts"><button class="sb-go" data-sb="add">＋ 한 명 추가</button><button class="sb-go sb-2" data-sb="paste">📋 엑셀 붙여넣기</button></div>' +
-      '<p class="sb-tip" style="text-align:center">' + esc(C.job) + '로 새로 입사하는 분은 입퇴사 서류 앱에서 자동으로 들어와요 (1시간마다).<br>주민번호·주소·전화·서명은 여기 오지 않아요.</p>';
+      '<p class="sb-tip" style="text-align:center">' + esc(C.jobs ? '' : C.job + '로 ') + '새로 입사하는 분은 입퇴사 서류 앱에서 자동으로 들어와요 (1시간마다).<br>주민번호·주소·전화·서명은 여기 오지 않아요.</p>';
     return h;
   }
   function field(lbl, name, val, extra) { return '<label class="sb-f"><span>' + lbl + '</span><input data-sbf="' + name + '" value="' + esc(val || '') + '" ' + (extra || '') + '></label>'; }
@@ -113,6 +122,7 @@
     return '<section class="sb-sec"><h3>' + (e.isNew ? '＋ 한 명 추가' : esc(p.name) + ' 님') + (p.src === 'hr' ? ' <small>입퇴사 서류 앱에서 온 분</small>' : '') + '</h3>' +
       (p.src === 'hr' ? '<p class="sb-warn">입퇴사 앱 정보가 바뀌면(퇴사 접수 등) 그 내용으로 다시 맞춰져요. 계약 내용은 입퇴사 앱에서 고쳐 주세요.</p>' : '') +
       field('이름', 'name', p.name, 'maxlength="20"') +
+      (C.jobs ? '<label class="sb-f"><span>직종</span><select data-sbf="job"><option value="">직종 고르기</option>' + C.jobs.concat(p.job && C.jobs.indexOf(p.job) < 0 ? [p.job] : []).map(function (j) { return '<option' + (p.job === j ? ' selected' : '') + '>' + esc(j) + '</option>'; }).join('') + '</select></label>' : '') +
       field('등급', 'grade', p.grade, 'maxlength="10" placeholder="' + esc(C.gradeHint || '예: S, A, 신규') + '"') +
       field('근무조', 'shift', p.shift, 'maxlength="10" placeholder="없으면 비워 두세요"') +
       field('입사일', 'hired', p.hired, 'type="date"') +
@@ -126,7 +136,7 @@
   function pasteHtml() {
     var P = F.paste, h = '<section class="sb-sec"><h3>📋 엑셀 붙여넣기</h3>' +
       '<p class="sb-tip" style="margin:0 0 8px">엑셀에서 <b>제목 줄까지</b> 같이 복사해 붙여 넣으세요. 알아보는 제목: 이름(성명) · 직종 · 등급 · 근무조 · 입사일 · 퇴사일 · 상태<br>제목 줄이 없으면 「이름 · 입사일」 순서로 읽어요. 이미 있는 분은 <b>이름으로 찾아서</b> 적힌 칸만 바꿔요 (빈칸은 그대로).' +
-      '<br>직종 칸이 있으면 ' + esc(C.job) + '인 줄만 넣어요.</p>' +
+      (C.jobs ? '<br>직종 칸이 없으면 위에서 고른 파트(' + esc(F.part || '고르지 않음') + ')로 넣어요. 같은 이름은 <b>이름+직종</b>으로 찾아요.' : '<br>직종 칸이 있으면 ' + esc(C.job) + '인 줄만 넣어요.') + '</p>' +
       '<textarea class="sb-ta" data-sb="ta" rows="7" placeholder="이름	입사일&#10;홍길순	2019-03-04">' + esc(P.text) + '</textarea>' +
       '<div class="sb-acts" style="margin-top:8px"><button class="sb-go" data-sb="pcheck">미리보기</button><button class="sb-go sb-2" data-sb="back">닫기</button></div></section>';
     var r = P.res;
@@ -165,18 +175,20 @@
       var nm = get('name');
       if (!nm) return;
       var jb = get('job');
-      if (jb && jb !== job) { out.skip++; return; }
-      if (seen[key(nm)]) { out.bad.push(no + ': ' + nm + ' 님이 붙여 넣은 내용에 두 번 있어요 — 한 줄만 남겨 주세요'); return; }
-      seen[key(nm)] = 1;
+      if (jb && job && jb !== job) { out.skip++; return; }
+      var rj = jb || job;
+      if (!rj) { out.bad.push(no + ': ' + nm + ' — 직종을 몰라요 (직종 칸을 같이 붙이거나 위에서 파트를 고르세요)'); return; }
+      if (seen[key(nm) + '|' + rj]) { out.bad.push(no + ': ' + nm + ' 님이 붙여 넣은 내용에 두 번 있어요 — 한 줄만 남겨 주세요'); return; }
+      seen[key(nm) + '|' + rj] = 1;
       var v = {}, okRow = true;
       ['grade', 'shift', 'status'].forEach(function (k) { var x = get(k); if (x) v[k] = x; });
       ['hired', 'left'].forEach(function (k) { var x = get(k); if (x === undefined || x === '') return; var d = normDate(x); if (d === null) { out.bad.push(no + ': ' + nm + ' — ' + LABEL[k] + " '" + x + "' 를 날짜로 못 읽었어요 (예: 2019-03-04)"); okRow = false; } else if (d) v[k] = d; });
       if (v.status && STATES.indexOf(v.status) < 0) { if (/퇴/.test(v.status)) v.status = '퇴사'; else if (/재|근무/.test(v.status)) v.status = '재직'; else { out.bad.push(no + ': ' + nm + " — 상태 '" + v.status + "' 는 재직·입사 진행·퇴사 중 하나여야 해요"); okRow = false; } }
       if (!okRow) return;
-      var cand = byName[key(nm)] || [];
+      var cand = (byName[key(nm)] || []).filter(function (p) { return !job ? (p.job || '') === rj : true; });
       if (cand.length > 1) { out.bad.push(no + ': ' + nm + ' 님이 명단에 ' + cand.length + '명 있어요 — 한 명씩 눌러서 고쳐 주세요'); return; }
       if (!cand.length) {
-        out.add.push({ doc: { name: nm, job: job, grade: v.grade || '', shift: v.shift || '', hired: v.hired || '', left: v.left || '',
+        out.add.push({ doc: { name: nm, job: rj, grade: v.grade || '', shift: v.shift || '', hired: v.hired || '', left: v.left || '',
           status: v.status || (v.left && v.left <= today() ? '퇴사' : '재직'), src: '관리자', hrId: '' } });
         return;
       }
@@ -197,7 +209,7 @@
   function readForm() {
     var d = Object.assign({}, F.edit.doc);
     Array.prototype.forEach.call(document.querySelectorAll('#sb [data-sbf]'), function (el) { d[el.getAttribute('data-sbf')] = el.value; });
-    d.name = clean(d.name, 20); d.grade = clean(d.grade, 10); d.shift = clean(d.shift, 10);
+    d.name = clean(d.name, 20); d.job = clean(d.job, 12); d.grade = clean(d.grade, 10); d.shift = clean(d.shift, 10);
     return d;
   }
   function upsert(id, d) {
@@ -209,15 +221,16 @@
     var d = readForm(), e = F.edit;
     e.doc = d; e.err = '';
     if (!d.name) { e.err = '이름을 적어 주세요.'; draw(); return; }
+    if (C.jobs && !d.job) { e.err = '직종을 골라 주세요.'; draw(); return; }
     if (d.name === '관리자') { e.err = "'관리자'는 이름으로 쓸 수 없어요."; draw(); return; }
     var hd = normDate(d.hired), ld = normDate(d.left);
     if (hd === null || ld === null) { e.err = '날짜를 다시 확인해 주세요.'; draw(); return; }
     d.hired = hd; d.left = ld;
     if (d.hired && d.left && d.left < d.hired) { e.err = '퇴사일이 입사일보다 빨라요.'; draw(); return; }
     if (d.left && d.left <= today() && stateOf(d) !== '퇴사' && confirm('퇴사일이 지났어요. 상태를 「퇴사」로 바꿀까요?')) d.status = '퇴사';
-    var dup = F.list.filter(function (p) { return p.id !== e.id && key(p.name) === key(d.name); });
+    var dup = F.list.filter(function (p) { return p.id !== e.id && key(p.name) === key(d.name) && (!C.jobs || p.job === d.job); });
     if (dup.length && !confirm(d.name + ' 님이 이미 명단에 있어요. 그래도 따로 저장할까요? (동명이인일 때만)')) return;
-    d.job = d.job || C.job;
+    d.job = d.job || C.job || '';
     if (!d.src) d.src = '관리자';
     if (d.hrId === undefined) d.hrId = '';
     var id = e.id || C.api.newId();
@@ -247,7 +260,7 @@
       if (!F) return;
       if (i >= jobs.length) {
         F.saving = false; changed();
-        if (fails.length) { P.err = fails.length + '명 저장 실패: ' + fails.slice(0, 3).join(', ') + (fails.length > 3 ? ' …' : '') + ' — 인터넷과 관리자 로그인을 확인하고 다시 눌러 주세요'; P.res = parsePaste(P.text, F.list, C.job); draw(); return; }
+        if (fails.length) { P.err = fails.length + '명 저장 실패: ' + fails.slice(0, 3).join(', ') + (fails.length > 3 ? ' …' : '') + ' — 인터넷과 관리자 로그인을 확인하고 다시 눌러 주세요'; P.res = parsePaste(P.text, F.list, pjob()); draw(); return; }
         F.msg = jobs.length + '명을 저장했어요 (새로 ' + r.add.length + ' · 바뀜 ' + r.chg.length + ').'; F.paste = null; draw(); return;
       }
       var part = jobs.slice(i, i + 20); i += part.length;
@@ -256,7 +269,8 @@
       })).then(function () { draw(); next(); });
     })();
   }
-  function newDoc(name) { return { name: name || '', job: C.job, grade: '', shift: '', hired: '', left: '', status: '재직', src: '관리자', hrId: '' }; }
+  function pjob() { return C.jobs ? F.part : C.job; }   // 허브: 파트를 골랐으면 그 직종, 아니면 줄마다 직종 칸
+  function newDoc(name) { return { name: name || '', job: C.jobs ? F.part : C.job, grade: '', shift: '', hired: '', left: '', status: '재직', src: '관리자', hrId: '' }; }
 
   // ---------- 누르기 · 입력
   document.addEventListener('click', function (e) {
@@ -268,6 +282,7 @@
     if (a === 'close') { close(); return; }
     if (a === 'reload') { load(); return; }
     if (a === 'tab') { F.tab = v; draw(); return; }
+    if (a === 'part') { F.part = v; draw(); return; }
     if (a === 'add') { F.edit = { id: null, isNew: true, doc: newDoc(), err: '' }; draw(); return; }
     if (a === 'prefill') { F.edit = { id: null, isNew: true, doc: newDoc(v), err: '' }; draw(); return; }
     if (a === 'edit') { var p = F.list.filter(function (x) { return x.id === v; })[0]; if (p) { F.edit = { id: p.id, isNew: false, doc: Object.assign({}, p), err: '' }; draw(); } return; }
@@ -275,7 +290,7 @@
     if (a === 'esave') { editSave(); return; }
     if (a === 'edel') { editDel(); return; }
     if (a === 'paste') { F.paste = { text: '', res: null, err: '' }; draw(); return; }
-    if (a === 'pcheck') { F.paste.res = parsePaste(F.paste.text, F.list, C.job); F.paste.err = ''; draw(); return; }
+    if (a === 'pcheck') { F.paste.res = parsePaste(F.paste.text, F.list, pjob()); F.paste.err = ''; draw(); return; }
     if (a === 'psave') { pasteSave(); return; }
   });
   document.addEventListener('input', function (e) {
@@ -315,6 +330,8 @@
     '.sb-ok{margin:0 0 12px;padding:10px 12px;border-radius:12px;background:#E5F4EA;color:#1F5130;font-size:14px;font-weight:700}',
     '.sb-err{margin:8px 0 0;color:var(--warn,#B23A48);font-weight:700;font-size:14px}',
     '.sb-warn{margin:10px 0 0;color:#8A5A00;background:#FDF3DC;border-radius:10px;padding:8px 10px;font-size:13.5px}',
+    '.sb-parts{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 8px}.sb-parts button{min-height:40px;padding:0 12px;border:1.5px solid var(--line);border-radius:99px;background:var(--surface,#fff);font:700 14px inherit;font-family:inherit;color:var(--ink);cursor:pointer;display:inline-flex;gap:6px;align-items:center}',
+    '.sb-parts button b{font-size:13px;color:var(--muted)}.sb-parts button[aria-pressed="true"]{background:var(--sbm);border-color:var(--sbm);color:#fff}.sb-parts button[aria-pressed="true"] b{color:#fff}',
     '.sb-chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}.sb-chips button{min-height:40px;padding:0 12px;border:1.5px dashed var(--line);border-radius:99px;background:var(--surface,#fff);font:700 14px inherit;font-family:inherit;color:var(--ink);cursor:pointer}'
   ].join('\n');
   document.head.appendChild(css);

@@ -5,7 +5,7 @@ import { initializeApp } from 'https://www.gstatic.com/firebasejs/12.19.0/fireba
 import { getAuth, onAuthStateChanged, signInAnonymously, signInWithEmailAndPassword, signOut as fbSignOut } from 'https://www.gstatic.com/firebasejs/12.19.0/firebase-auth.js';
 import {
   initializeFirestore, persistentLocalCache, persistentMultipleTabManager,
-  doc, collection, onSnapshot, getDoc, getDocs, getDocFromServer, setDoc, deleteDoc, query, where,
+  doc, collection, onSnapshot, getDoc, getDocs, getDocFromServer, getCountFromServer, setDoc, deleteDoc, query, where,
   serverTimestamp, Timestamp
 } from 'https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore.js';
 
@@ -79,6 +79,9 @@ export async function getQuery(c, w) {
   const s = await getDocs(q(c, w));
   return s.docs.map(d => ({ id: d.id, data: snapData(d) }));
 }
+
+// 개수만 세기 (2026-11-12, 관리자 허브 활동 진도율) — 문서를 받지 않아 읽기 1건(1000개당)으로 끝남
+export async function count(c, w) { const s = await getCountFromServer(q(c, w)); return s.data().count; }
 
 // ---------- 쓰기: 화면엔 바로 반영(휴대폰 보관), 돌려주는 약속(promise)은 서버가 받아야 끝남
 export function set(path, data) { return setDoc(ref(path), enc(data)); }
