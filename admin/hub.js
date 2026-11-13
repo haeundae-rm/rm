@@ -12,7 +12,7 @@
 // 2단계 ③ (2026-11-13): 📣 고객만족도 VOC — 정비 레포트 voc.js 를 그대로 불러와 허브 전체 화면에서 씀 (같은 voc/{id} 문서). 열려 있는 동안만 voc 구독
 import * as S from '../app/store.js';
 
-const VER = '2026.11.13-8';
+const VER = '2026.11.13-9';
 const ADMINS = [
   { uid: 'iw2orXgIgPgTbLUQa0b41XJ9Dvd2', label: '소장', email: 'unieshaeundae+admin@gmail.com' },
   { uid: 'Fz4T5ZzIxShOdVkNpF9gzMmOLED2', label: '부소장', email: 'unieshaeundae+sub@gmail.com' }
@@ -39,8 +39,22 @@ let user = null, admin = null, view = { st: null, busy: false, err: '', at: 0 },
 
 function head() {
   const t = seoul(), d = ymd();
-  $('#today').textContent = Number(d.slice(5, 7)) + '월 ' + Number(d.slice(8)) + '일 (' + DAYS[t.getUTCDay()] + ') 한화리조트 해운대 객실관리';
-  const w = $('#who'); w.hidden = !admin; if (admin) w.textContent = admin.label;
+  $('#calm').textContent = Number(d.slice(5, 7)) + '월 · ' + DAYS[t.getUTCDay()];
+  $('#cald').textContent = Number(d.slice(8));
+  $('#today').textContent = '한화리조트 해운대' + (admin ? ' · ' + admin.label : '');
+  const v = admin && view.st, ring = $('#ring'), line = $('#hline');
+  if (!v) { ring.hidden = true; line.innerHTML = ''; return; }
+  const p = progress(v), L = statusItems(v), nb = L.filter(x => x.lv === 'bad').length, nw = L.filter(x => x.lv === 'wait').length;
+  ring.hidden = false;
+  const C = 150.8, off = p.total ? C * (1 - p.pct / 100) : C;
+  ring.innerHTML = '<svg width="56" height="56" viewBox="0 0 58 58"><circle cx="29" cy="29" r="24" stroke="rgba(255,255,255,.14)" stroke-width="6" fill="none"/>' +
+    (p.total ? '<circle cx="29" cy="29" r="24" stroke="#E8C77A" stroke-width="6" fill="none" stroke-linecap="round" stroke-dasharray="' + C + '" stroke-dashoffset="' + off.toFixed(1) + '" transform="rotate(-90 29 29)"/>' : '') +
+    '</svg><b>' + (p.total ? p.pct + '%' : '-') + '</b>';
+  ring.title = '오늘 정비 진행';
+  line.innerHTML = '<span><i class="dot' + (nb ? ' bad' : nw ? ' wait' : '') + '"></i>' + (nb ? '확인 필요 ' + nb + '건' : nw ? '주의 ' + nw + '건' : '모두 정상') + '</span>' +
+    (p.maids ? '<span>메이드<b>' + p.maids + '</b></span>' : '') +
+    (p.total ? '<span>남은 실<b>' + Math.max(0, p.total - p.doneU) + '</b></span>' : '') +
+    (p.issue ? '<span>이상<b style="color:#F3B1B9">' + p.issue + '</b></span>' : '');
 }
 
 // ---------- 로그인 (소장 · 부소장 — 레포트 앱과 같은 계정)
@@ -458,7 +472,7 @@ function draw() {
   if (user === null) { $('#main').innerHTML = '<div class="card"><p class="note" style="margin:0">여는 중…</p></div>'; return; }
   if (!admin) { $('#main').innerHTML = loginHtml(); return; }
   $('#main').innerHTML = todayHtml() + assignCardHtml() + vocCardHtml() + linksHtml() + staffHtml() +
-    '<div class="foot">객실 통합 관리 ' + VER + ' · <button data-logout="1">로그아웃</button></div>';
+    '<div class="foot">객실 통합 관리 시스템 ' + VER + ' · <button data-logout="1">로그아웃</button></div>';
 }
 
 // ---------- 직원 명단 (정비 레포트 · 정비 지원과 같은 화면 파일 — 여기선 전 파트)
