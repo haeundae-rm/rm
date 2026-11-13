@@ -62,10 +62,46 @@ export function runAssign(rooms, ho, cfg0, prev2901, hist, opts) {
     const fr = free().filter(x => x.floor === f).sort((p, q) => p.room - q.room);
     if (a) for (const x of fr) if ((zone(x) === 'A' || !b) && !owner[x.room] && can(a, x)) give(a, x, f + 'F A키 담당');
   }
+  // 2-1 B키 옮기기 (11/8 사용자 확정 → 11/13 '2번 조금 완화'로 바꿈, v2 · opts.bMove !== false)
+  //   조건: ② 그날 B키 구역 배정 객실 3실 이하 + 그 층 A키가 출근해 자기 층에만 있음
+  //   ① A키가 남은 유닛만큼 B구역 방을 받음 — 다 못 받으면 나머지는 같은 층·옆 층 분들이 채움(6·7단계)
+  //   ③ B키는 빈 층(두 키 다 없는 층) 덩어리가 있으면 통째로, 없으면 남은 방을 덩어리로 받음 (층 수 같거나 줄어들 때만 빈 층 지정)
+  //   opts.bMoveMode = 'strict' 면 11/8 처음 조건(A키가 다 받고 남는 유닛 1 이하일 때만)
+  const OVR = {}, OVR_WHY = {}, bMoves = [], MOVED = new Set(), FROM_B = {};
+  const BM_MAX = opts.bMoveMax != null ? opts.bMoveMax : 3, BM_STRICT = opts.bMoveMode === 'strict', BM_SHARE = opts.bShare != null ? opts.bShare : 0.5, BM_MIN_BLOCK = opts.bMoveMin != null ? opts.bMoveMin : 4;
+  if (V2 && opts.bMove !== false) {
+    const orphan = () => { const m = {}; free().forEach(x => { if (MOVED.has(x.room) || W[A_KEY[x.floor]] || W[B_KEY[x.floor]]) return; (m[x.floor] = m[x.floor] || []).push(x); }); return m; };
+    const bNames = [...new Set(Object.values(B_KEY))].filter(n => W[n] && W[n].load === 0 && !(opts.noBMove || []).includes(n));
+    const cands = bNames.map(b => { const fs = Object.keys(B_KEY).map(Number).filter(f => B_KEY[f] === b);
+      const xs = free().filter(x => fs.includes(x.floor) && (zone(x) === 'B' || !W[A_KEY[x.floor]]));
+      return { b, xs }; }).filter(c => c.xs.length > 0 && c.xs.length <= BM_MAX).sort((p, q) => p.xs.length - q.xs.length || (p.b < q.b ? -1 : 1));
+    for (const { b, xs } of cands) {
+      const byF = {}; xs.forEach(x => (byF[x.floor] = byF[x.floor] || []).push(x));
+      const ok1 = Object.keys(byF).every(f => { const a = A_KEY[f]; if (!W[a] || a === b) return false; const fsA = floors(a);
+        if (fsA.size !== 1 || !fsA.has(Number(f))) return false;
+        if (!BM_STRICT) { const fit = byF[f].filter(x => x.w <= rem(a) + 1e-9).length; return Math.min(fit, Math.floor(rem(a) + 1e-9)) >= Math.max(1, Math.ceil(byF[f].length * BM_SHARE)); }
+        const need = byF[f].reduce((s, x) => s + x.w, 0), r = rem(a);
+        return need <= r + 1e-9 && r - need <= 1 + 1e-9 && byF[f].every(x => !(x.late && lateN(a) + byF[f].filter(y => y.late).length > LATE_MAX)); });
+      if (!ok1) continue;
+      const om = orphan(); let best = null;
+      for (const f of Object.keys(om).map(Number)) { const xsF = om[f].filter(x => !ROYAL.includes(x.room) && !(STAGE.includes(b) && x.floor >= 30)); const size = xsF.reduce((s, x) => s + x.w, 0);
+        if (size < BM_MIN_BLOCK) continue; if (!best || size > best.size || (size === best.size && f < best.f)) best = { f, xs: xsF, size }; }
+      const before = new Set(xs.map(x => x.floor)).size + (xs.reduce((s, x) => s + x.w, 0) < W[b].cap ? 1 : 0);
+      if (best && (best.size >= W[b].cap - 1e-9 ? 1 : 2) > before) best = null;
+      if (!best && BM_STRICT) continue;
+      const toA = [], shared = [];
+      Object.keys(byF).forEach(f => { const a = A_KEY[f]; toA.push(a);
+        byF[f].sort((p, q) => p.room - q.room).forEach(x => { OVR[x.room] = a; FROM_B[x.room] = b; OVR_WHY[x.room] = 'B키 옮기기 (담당 ' + b + ')';
+          if (can(a, x)) give(a, x, f + 'F B구역 · B키 옮기기 (담당 ' + b + ')'); else { MOVED.add(x.room); shared.push(x.room); } }); });
+      let took = 0;
+      if (best) for (const x of best.xs.sort((p, q) => p.room - q.room)) if (can(b, x)) { give(b, x, best.f + 'F 통째 · B키 옮기기'); OVR[x.room] = b; OVR_WHY[x.room] = 'B키 옮기기 → ' + best.f + 'F'; took++; }
+      bMoves.push({ b, from: Object.keys(byF).map(Number).sort((p, q) => q - p), rooms: xs.map(x => x.room), shared, to: best ? best.f : null, took, a: toA });
+    }
+  }
   // 3 B키 담당 층
   for (const f of Object.keys(B_KEY).map(Number).sort((a, b) => b - a)) {
     const b = W[B_KEY[f]] ? B_KEY[f] : null; if (!b) continue; const a = W[A_KEY[f]] ? A_KEY[f] : null;
-    for (const x of free().filter(x => x.floor === f).sort((p, q) => p.room - q.room)) if ((zone(x) === 'B' || !a) && can(b, x)) give(b, x, f + 'F B키 담당');
+    for (const x of free().filter(x => x.floor === f && !MOVED.has(x.room)).sort((p, q) => p.room - q.room)) if ((zone(x) === 'B' || !a) && can(b, x)) give(b, x, f + 'F B키 담당');
   }
   // 4 2901 (PLT)
   const p = TX['2901'];
@@ -129,7 +165,7 @@ export function runAssign(rooms, ho, cfg0, prev2901, hist, opts) {
     for (const x of best.xs.sort((p, q) => p.room - q.room)) if (can(best.n, x)) give(best.n, x, f0.has(best.f) ? '같은 층 보충' : best.f + 'F 보충');
   }
   // 7 다듬기 (비용 줄이기)
-  const keyOf = x => { const a = A_KEY[x.floor], b = B_KEY[x.floor]; const za = zone(x) === 'A';
+  const keyOf = x => { if (OVR[x.room]) return OVR[x.room]; const a = A_KEY[x.floor], b = B_KEY[x.floor]; const za = zone(x) === 'A';
     if (za && W[a]) return a; if (!za && W[b]) return b; return W[a] ? a : W[b] ? b : null; };
   const capO = Object.fromEntries(Object.keys(W).map(n => [n, HO[n]]));
   const capF = Object.fromEntries(Object.keys(W).map(n => [n, W[n].cap]));
@@ -145,6 +181,7 @@ export function runAssign(rooms, ho, cfg0, prev2901, hist, opts) {
     for (const r of w.rooms) { const x = TX[r]; if (!x || r === '2901') continue; const ko = keyOf(x); if (ko && ko !== n) { const real = (zone(x) === 'A' ? A_KEY : B_KEY)[x.floor] === ko; c += !real ? 1 : zone(x) === 'A' ? 25 : 12; } }
     if (opts.chunk !== false) { const byF = {}; w.rooms.forEach(r => { const x = TX[r]; if (!x || r === '2901') return; if (keyOf(x) === n) return; byF[x.floor] = (byF[x.floor] || 0) + 1; });
       Object.values(byF).forEach(s => { c += s <= 2 ? 10 : s <= 4 ? 4 : 0; }); }
+    c += w.rooms.filter(r => FROM_B[r] === n).length * 12;
     if (lateN(n) > LATE_MAX) c += 100; if (fakN(n) > (n === A_KEY[18] ? FAK_OWNER_MAX : 1)) c += 300;
     return c;
   }
@@ -211,7 +248,7 @@ export function runAssign(rooms, ho, cfg0, prev2901, hist, opts) {
   }
   load0(bestAll); tick(1);
   for (const n of names) { const w = W[n]; const keep = w.why.filter(t => /^2901|로얄/.test(t));
-    w.why = keep.concat(w.rooms.filter(r => r !== '2901' && !ROYAL.includes(r)).map(r => { const x = TX[r], ko = keyOf(x); return r + (ko === n ? ' 담당' : ' 보충'); }));
+    w.why = keep.concat(w.rooms.filter(r => r !== '2901' && !ROYAL.includes(r)).map(r => { const x = TX[r], ko = keyOf(x); return r + (ko === n ? (OVR_WHY[r] ? ' ' + OVR_WHY[r] : ' 담당') : ' 보충'); }));
     if (w.load < capO[n] - 1e-9) w.why.unshift('유닛 다운 ' + capO[n] + '→' + w.load);
     if (w.load > capO[n] + 1e-9) w.why.unshift('+1 (베테랑 우선) ' + capO[n] + '→' + w.load); w.cap = w.load; }
   const left = free().map(x => x.room);
@@ -220,7 +257,8 @@ export function runAssign(rooms, ho, cfg0, prev2901, hist, opts) {
   const stats = { target: T.length, units: T.reduce((s, x) => s + (x.room === '2901' ? (owner['2901'] ? owner['2901'].split(', ').length : 0) : x.w), 0),
     handover: Object.values(HO).reduce((a, b) => a + b, 0), left: left.length, avgFloors: fl.length ? fl.reduce((a, b) => a + b, 0) / fl.length : 0,
     three: names.filter(n => workers[n].floors.length >= 3), plt: owner['2901'] ? owner['2901'].split(', ') : [],
-    down: names.filter(n => workers[n].load < capO[n] - 1e-9), up: names.filter(n => workers[n].load > capO[n] + 1e-9) };
+    down: names.filter(n => workers[n].load < capO[n] - 1e-9), up: names.filter(n => workers[n].load > capO[n] + 1e-9),
+    bMove: bMoves.map(m => Object.assign({}, m, { kept: m.rooms.filter(r => owner[r] && m.a.includes(owner[r])).length, keptTo: W[m.b].rooms.filter(r => TX[r] && TX[r].floor === m.to).length, bFloors: [...floors(m.b)].sort((p, q) => q - p) })) };
   return { owner, workers, left, cost: Math.round(bestCost), stats };
 }
 
