@@ -12,7 +12,7 @@
 // 2단계 ③ (2026-11-13): 📣 고객만족도 VOC — 정비 레포트 voc.js 를 그대로 불러와 허브 전체 화면에서 씀 (같은 voc/{id} 문서). 열려 있는 동안만 voc 구독
 import * as S from '../app/store.js';
 
-const VER = '2026.11.13-6';
+const VER = '2026.11.13-7';
 const ADMINS = [
   { uid: 'iw2orXgIgPgTbLUQa0b41XJ9Dvd2', label: '소장', email: 'unieshaeundae+admin@gmail.com' },
   { uid: 'Fz4T5ZzIxShOdVkNpF9gzMmOLED2', label: '부소장', email: 'unieshaeundae+sub@gmail.com' }
@@ -232,10 +232,10 @@ function repDoc(u0, r) {
     cards: (r.data.cards || []).map(c => ({ label: String(v(c.label)), name: String(v(c.name)), unit: v(c.unit), actual: v(c.actual) })),
     rooms: (r.data.rooms || []).map(x => { const o = { room: String(x.room), st: v(x.st) }; if (x.name) o.name = String(x.name); return o; }) };
 }
-function upSend() {
+function upSend(skipAsk) {
   const u0 = up, r = u0 && u0.res, s = r && r.summary;
   if (!s || u0.sending) return;
-  if (!s.ok && !confirm('검증에서 다른 점이 있어요. 그래도 올릴까요?')) return;
+  if (!s.ok && !skipAsk && !confirm('검증에서 다른 점이 있어요. 그래도 올릴까요?')) return;
   u0.sending = true; u0.err = ''; draw();
   if (r.data) S.set('uploads/rep_' + u0.date, repDoc(u0, r)).catch(() => {});   // 정비 지원 더티 배분용 (실패해도 배정 올리기는 그대로)
   withTimeout(S.set('uploads/latest', { date: u0.date, csv: r.csv, state: 'wait', at: S.SERVER_TIME, by: user.uid, who: admin.label, file: String(u0.file).slice(0, 80),
@@ -415,7 +415,7 @@ function closeVoc() {
   const p = document.getElementById('vp'); if (p) p.remove(); document.body.classList.remove('sb-lock');
 }
 async function openAssignUI() {
-  try { const m = await import(new URL('./assignui.js?v=' + VER, import.meta.url).href); m.openAssign({ S, esc, ymd, addDays, md, admin: () => admin, user: () => user }); }
+  try { const m = await import(new URL('./assignui.js?v=' + VER, import.meta.url).href); m.openAssign({ S, esc, ymd, addDays, md, admin: () => admin, user: () => user, upload: o => { up = { file: o.file, date: o.date, res: o.res, buf: null }; draw(); upSend(true); scrollUp(); } }); }
   catch (e) { alert('자동 배정 화면을 못 불러왔어요: ' + (e && e.message || e)); }
 }
 function assignCardHtml() {
@@ -488,7 +488,7 @@ document.addEventListener('click', e => {
   if (t.hasAttribute('data-up')) {
     const a = t.getAttribute('data-up');
     if (a === 'pick') pickXlsx();
-    else if (a === 'send') upSend();
+    else if (a === 'send') upSend(false);
     else if (a === 'reset') { clearTimeout(upPoll); up = null; draw(); }
     return;
   }

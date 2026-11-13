@@ -101,6 +101,12 @@ main{max-width:760px;margin:0 auto;padding:14px 16px 60px}
 .asg-m .n small{color:var(--muted);font-size:12px}.asg-m .f{text-align:right;font-size:14px;font-variant-numeric:tabular-nums}.asg-m .f small{display:block;color:var(--muted);font-size:12px;font-weight:500}
 .asg-why{font-size:13px;background:var(--tile);border-radius:10px;padding:8px 10px;margin:0 0 6px;line-height:1.55;word-break:keep-all}
 .asg-why small{color:var(--muted)}
+.asg-chips{display:flex;flex-wrap:wrap;gap:5px;margin:0 0 6px}
+.asg-chip{border:1.5px solid var(--line);background:var(--surface);border-radius:8px;padding:4px 7px;font:700 13px var(--f-num);cursor:pointer;color:var(--ink)}
+.asg-chip.on{background:var(--brand);border-color:var(--brand);color:#fff}.asg-chip.bad{border-color:var(--warn);color:var(--warn)}
+.asg-mv{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin:0 0 8px;font-size:14px}
+.asg-mv select{flex:1 1 100%;min-height:44px;border:1.5px solid var(--line);border-radius:10px;font:15px inherit;padding:0 8px;background:var(--surface);color:var(--ink)}
+.asg-mv .big-btn{flex:1;min-height:44px}
 /* VOC 화면 (2026-11-13, 정비 레포트 voc.js 를 허브에서 그대로 씀) — 정비 레포트 style.css 에서 VOC 부분만 옮김 */
 .vp{position:fixed;inset:0;z-index:55;background:var(--bg);overflow-y:auto;-webkit-overflow-scrolling:touch}
 .vp-in{max-width:760px;margin:0 auto;padding:calc(10px + env(safe-area-inset-top)) 16px 120px}
@@ -160,7 +166,7 @@ main{max-width:760px;margin:0 auto;padding:14px 16px 60px}
 <header class="top"><div class="top-in"><div><h1>객실 통합 관리</h1><div class="sub" id="today"></div></div><span class="who" id="who" hidden></span></div></header>
 <main id="main"><div class="card"><p class="note" style="margin:0">여는 중…</p></div></main>
 <noscript><div class="card">이 화면은 자바스크립트가 켜져 있어야 해요.</div></noscript>
-<script type="module" src="hub.js?v=2026.11.13-6"></script>
+<script type="module" src="hub.js?v=2026.11.13-7"></script>
 <script>if ('serviceWorker' in navigator) { window.addEventListener('load', function () { navigator.serviceWorker.register('sw.js').catch(function () {}); }); }</script>
 </body>
 </html>
