@@ -6,10 +6,12 @@
 //   → 중계가 시트 '배정' 탭·메이드 휴대폰으로, 정비 지원 '더티 배분 만들기'는 파일 없이 불러옴. 정비 레포트 쪽 버튼도 그대로 둠(1~2주 같이 씀)
 // 2단계 ② (2026-11-13): 🛏 더티 배분 만들기 — 정비 지원의 화면 파일(dist.js · distcalc.js)을 그대로 불러와 허브에서 엶 (같은 계산·같은 저장 sup/{날짜})
 //   정비 지원 앱 쪽 버튼도 그대로 둠
+// 2단계 ④ (2026-11-13): 🗺 객실 활동판 — 정비 지원 화면을 허브 안 전체 창(iframe /dirty/?hub=act)으로 열어 활동판을 바로 띄움.
+//   같은 주소라 로그인 공유, 활동판을 닫으면 정비 지원이 알려 와서(postMessage) 창을 닫고 오늘 한눈에 다시 읽음. 열려 있는 동안만 정비 지원 구독
 // 2단계 ③ (2026-11-13): 📣 고객만족도 VOC — 정비 레포트 voc.js 를 그대로 불러와 허브 전체 화면에서 씀 (같은 voc/{id} 문서). 열려 있는 동안만 voc 구독
 import * as S from '../app/store.js';
 
-const VER = '2026.11.13-4';
+const VER = '2026.11.13-5';
 const ADMINS = [
   { uid: 'iw2orXgIgPgTbLUQa0b41XJ9Dvd2', label: '소장', email: 'unieshaeundae+admin@gmail.com' },
   { uid: 'Fz4T5ZzIxShOdVkNpF9gzMmOLED2', label: '부소장', email: 'unieshaeundae+sub@gmail.com' }
@@ -18,7 +20,7 @@ const ROYAL = { '3001': 1, '3002': 1, '3101': 1, '3102': 1 };   // 로얄 = 2실
 const JOBS = ['관리', '룸메이드', '정비보조', '하우스키퍼', '하우스맨', '오더테이커', '미화', '사우나', '기타'];
 const LINKS = [
   { ic: '🧹', t: '정비 레포트', s: '메이드별 현황 · 룸메이드 명단 · 메이드 화면', href: '../' },
-  { ic: '🛏', t: '정비 지원', s: '객실 활동판 · 정비보조 명단 · 정비보조 화면', href: '../../dirty/' },
+  { ic: '🛏', t: '정비 지원', s: '정비보조 명단 · 정비보조 화면', href: '../../dirty/' },
   { ic: '📝', t: '입퇴사 서류', s: '근로계약서 · 입사서류 · 사직서 (별도 비밀번호)', href: '../../unies-contract/' },
   { ic: '📦', t: '재고조사', s: '객실 · 사우나 재고 (부소장)', href: '../../inventory/' }
 ];
@@ -182,7 +184,8 @@ function actsHtml(v) {
   let h = '<div class="card"><h2>진행 중 활동 <small>객실 활동판</small></h2>';
   if (v.acts && v.acts.__err) return h + '<p class="err">활동을 못 읽었어요: ' + esc(v.acts.__err) + '</p></div>';
   const L = Array.isArray(v.acts) ? v.acts : [];
-  if (!L.length) return h + '<p class="note" style="margin:0">지금 진행 중인 활동이 없어요. 정비 지원 → 객실 활동판에서 열 수 있어요.</p></div>';
+  const btn = '<button class="big-btn sec" style="margin-top:12px" data-act="1">🗺 객실 활동판 열기 <small style="font-weight:600;color:var(--muted)">만들기 · 고치기 · 도면 · 출력</small></button>';
+  if (!L.length) return h + '<p class="note" style="margin:0">지금 진행 중인 활동이 없어요.</p>' + btn + '</div>';
   h += L.map(a => {
     const pct = a.target && a.proc !== null ? Math.min(100, Math.round(a.proc * 1000 / a.target) / 10) : 0, col = COLORS[a.color] || '#1FB59A';
     return '<div style="padding:8px 0;border-top:1px solid var(--line)"><div style="display:flex;justify-content:space-between;gap:8px;align-items:baseline"><b style="font-size:15px"><span style="display:inline-block;width:10px;height:10px;border-radius:3px;background:' + col + ';margin-right:6px"></span>' + esc(a.name) + '</b>' +
@@ -190,7 +193,7 @@ function actsHtml(v) {
       '<div class="bar" style="height:10px;margin:6px 0"><i style="width:' + pct + '%;background:' + col + '"></i></div>' +
       '<span class="note" style="margin:0">' + (a.proc === null ? '개수를 못 셌어요' : a.proc + ' / ' + a.target + '실' + (a.today ? ' · 오늘 +' + a.today : '')) + (a.due ? ' · 목표 ' + esc(md(a.due)) : '') + '</span></div>';
   }).join('');
-  return h + '</div>';
+  return h + btn + '</div>';
 }
 // ---------- 📥 정비보고서 올리기 (2단계, 2026-11-13)
 let up = null, engine = null, upPoll = null;
@@ -361,6 +364,21 @@ async function openDist() {
   }
   draw();
 }
+// ---------- 🗺 객실 활동판 (2단계 ④)
+function openAct() {
+  if (!admin || document.getElementById('actp')) return;
+  const p = document.createElement('div'); p.className = 'vp'; p.id = 'actp'; p.style.overflow = 'hidden';
+  p.innerHTML = '<div class="act-bar"><b>🗺 객실 활동판</b><span id="actmsg">여는 중…</span><button class="vp-x" data-actclose="1" aria-label="닫기">✕</button></div>' +
+    '<iframe id="actf" title="객실 활동판" src="' + new URL('../../dirty/?hub=act', import.meta.url).href + '"></iframe>';
+  document.body.appendChild(p); document.body.classList.add('sb-lock');
+  const f = p.querySelector('iframe'); f.addEventListener('load', () => { const m = document.getElementById('actmsg'); if (m) m.textContent = ''; });
+}
+function closeAct() { const p = document.getElementById('actp'); if (!p) return; p.remove(); document.body.classList.remove('sb-lock'); load(true); }
+window.addEventListener('message', e => {
+  if (e.origin !== location.origin || !e.data || !e.data.hub) return;
+  if (e.data.hub === 'close') closeAct();
+  if (e.data.hub === 'noadmin') { const m = document.getElementById('actmsg'); if (m) m.textContent = '정비 지원 관리자 확인이 안 돼요 — 닫고 다시 열어 주세요'; }
+});
 // ---------- 📣 고객만족도 VOC (2단계 ③)
 let VOC = null, vocOpen = false, vocToast = null;
 function vocSay(msg) {
@@ -450,9 +468,11 @@ function openStaff() {
 
 // ---------- 누르기
 document.addEventListener('click', e => {
-  const t = e.target.closest && e.target.closest('[data-who],[data-login],[data-ref],[data-staff],[data-logout],[data-up],[data-upd],[data-hdist],[data-voc],[data-vclose]');
+  const t = e.target.closest && e.target.closest('[data-who],[data-login],[data-ref],[data-staff],[data-logout],[data-up],[data-upd],[data-hdist],[data-voc],[data-vclose],[data-act],[data-actclose]');
   if (!t || (t.closest && t.closest('#dz'))) return;
   if (t.hasAttribute('data-voc')) { openVoc(); return; }
+  if (t.hasAttribute('data-act')) { openAct(); return; }
+  if (t.hasAttribute('data-actclose')) { closeAct(); return; }
   if (t.hasAttribute('data-vclose')) { closeVoc(); load(false); return; }
   if (t.hasAttribute('data-hdist')) { openDist(); return; }
   if (t.hasAttribute('data-up')) {
