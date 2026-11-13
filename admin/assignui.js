@@ -3,9 +3,9 @@
 // 2단계 (11/13): 객실 옮기기(고치기) · 2901 바꾸기 → ✅ 확정 → 앱에 올리기 (초안일 때만: 이름 넣은 정비보고서로 engine makeRows → 허브 '정비보고서 올리기'와 같은 길 → 메이드 휴대폰·더티 배분)
 // 정비보고서 xlsx(오더테이커용) 채우기는 다음 단계
 // 저장: meta/assign { quota, lastHo, hist2901:[{date, names}], log:[{date, pct, ...}] } — 관리자만 씀 (규칙 meta: 읽기 로그인, 쓰기 관리자)
-import { DEF_CFG, compare } from './assign.js?v=2026.11.13-7';
+import { DEF_CFG, compare } from './assign.js?v=2026.11.13-8';
 
-const VER = '2026.11.13-7';
+const VER = '2026.11.13-8';
 const ROYAL = ['3001', '3002', '3101', '3102'];
 let H = null;   // 허브에서 받은 것 { S, esc, ymd, addDays, md, admin, user }
 let A = null;   // 화면 상태
@@ -32,13 +32,19 @@ export async function openAssign(hub) {
   buildRows(); draw();
 }
 function close() { const b = document.getElementById('asp'); if (b) b.remove(); document.body.classList.remove('sb-lock'); if (A && A.worker) A.worker.terminate(); A = null; }
-function quota() { return Object.assign({}, DEF_CFG.quota, (A.cfgDoc && A.cfgDoc.quota) || {}); }
+// 담당표·정량 (11/13 설정 화면): meta/assign.cfg 가 있으면 그것, 없으면 엔진 기본값(DEF_CFG). 예전 meta/assign.quota 도 이어받음
+function cfg() {
+  const c = (A.cfgDoc && A.cfgDoc.cfg) || {};
+  return { aKey: c.aKey || DEF_CFG.aKey, bKey: c.bKey || DEF_CFG.bKey, royalOk: c.royalOk || DEF_CFG.royalOk, pltBlue: c.pltBlue || DEF_CFG.pltBlue,
+    quota: c.quota || Object.assign({}, DEF_CFG.quota, (A.cfgDoc && A.cfgDoc.quota) || {}) };
+}
+function quota() { return cfg().quota; }
 
 // 출근자 줄: 담당표 이름 + 정량 + 명단(룸메이드 재직) + 지난 인계 — 지난 인계 유닛을 먼저, 없으면 정량, 없으면 9
 function buildRows(fromCards) {
   const q = quota(), last = (A.cfgDoc && A.cfgDoc.lastHo) || {}, names = [];
   const add = n => { n = String(n || '').replace(/\s+/g, ''); if (n && n !== '관리자' && names.indexOf(n) < 0) names.push(n); };
-  Object.values(DEF_CFG.aKey).forEach(add); Object.values(DEF_CFG.bKey).forEach(add); Object.keys(q).forEach(add); A.staff.forEach(add); Object.keys(last).forEach(add);
+  Object.values(cfg().aKey).forEach(add); Object.values(cfg().bKey).forEach(add); Object.keys(q).forEach(add); A.staff.forEach(add); Object.keys(last).forEach(add);
   if (fromCards) Object.keys(fromCards).forEach(add);
   A.rows = names.map(n => {
     if (fromCards) return { name: n, on: n in fromCards, unit: fromCards[n] != null ? fromCards[n] : (q[n] != null ? q[n] : 9) };
@@ -94,7 +100,7 @@ function run() {
     draw();
   };
   w.onerror = e => { if (!A) return; A.worker = null; A.running = false; A.err = '배정 계산을 못 했어요: ' + (e.message || e); draw(); };
-  w.postMessage({ rooms, ho: H0, cfg: { quota: quota() }, prev2901: prev, hist, opts: { seeds: [11, 23, 37, 51], iter: 150000 } });
+  w.postMessage({ rooms, ho: H0, cfg: cfg(), prev2901: prev, hist, opts: { seeds: [11, 23, 37, 51], iter: 150000 } });
 }
 function saveLast(H0) {
   lsSet('asg_ho', JSON.stringify(H0));
@@ -159,11 +165,70 @@ async function confirmUpload() {
   } catch (e) { A.err = '올리지 못했어요: ' + (e && e.message || e); draw(); }
 }
 
+// ---------- ⚙️ 담당표·정량 설정
+function cfgOpen() {
+  const c = cfg();
+  A.cf = { aKey: Object.assign({}, c.aKey), bKey: Object.assign({}, c.bKey), royal: c.royalOk.join(', '), blue: c.pltBlue.join(', '),
+    quota: Object.keys(c.quota).map(n => ({ name: n, v: c.quota[n] })), err: '', saving: false };
+  A.view = 'cfg'; draw();
+  const b = document.getElementById('asp'); if (b) b.scrollTop = 0;
+}
+function cfgRead() {
+  const F = A.cf;
+  document.querySelectorAll('#asp [data-ck]').forEach(el => {
+    const [k, f] = el.getAttribute('data-ck').split(':'), v = el.value.replace(/\s+/g, '');
+    if (k === 'a' || k === 'b') { const o = k === 'a' ? F.aKey : F.bKey; if (v) o[f] = v; else delete o[f]; }
+    if (k === 'qn') F.quota[Number(f)].name = v;
+    if (k === 'qv') F.quota[Number(f)].v = el.value;
+  });
+  const r = document.getElementById('cfroyal'), bl = document.getElementById('cfblue');
+  if (r) F.royal = r.value; if (bl) F.blue = bl.value;
+}
+const splitNames = t => String(t || '').split(/[,·\s]+/).map(x => x.trim()).filter(Boolean).filter((x, i, a) => a.indexOf(x) === i);
+function cfgSave() {
+  cfgRead();
+  const F = A.cf, q = {};
+  for (const x of F.quota) { if (!x.name) continue; const v = Number(x.v); if (!(v >= 1 && v <= 15)) { F.err = x.name + ' 님 정량을 1~15 사이로 적어 주세요.'; draw(); return; } q[x.name] = v; }
+  const c = { aKey: F.aKey, bKey: F.bKey, royalOk: splitNames(F.royal), pltBlue: splitNames(F.blue), quota: q };
+  if (!c.royalOk.length) { F.err = '로얄 가능자를 한 분 이상 적어 주세요.'; draw(); return; }
+  F.saving = true; F.err = ''; draw();
+  const d = Object.assign({}, A.cfgDoc, { cfg: c, cfgAt: H.S.SERVER_TIME, cfgBy: H.admin().label });
+  H.S.set('meta/assign', d).then(() => { A.cfgDoc = d; A.view = ''; A.cf = null; A.saved = '담당표·정량을 저장했어요. 다음 배정부터 이대로 해요.'; buildRows(); draw(); },
+    e => { F.saving = false; F.err = '저장하지 못했어요: ' + (e && (e.code || e.message) || e); draw(); });
+}
+function cfgHtml() {
+  const esc = H.esc, F = A.cf, known = new Set(A.staff.concat(Object.values(F.aKey), Object.values(F.bKey)));
+  const warn = n => n && A.staff.length && !A.staff.includes(n) ? ' <span class="cf-w" title="직원 명단(룸메이드 재직)에 없는 이름">명단에 없음</span>' : '';
+  let h = '<div class="card"><h2>⚙️ 층별 담당표 <small>A키 = 층 대부분 · B키 = 호수 10·11·15·16·17 (27층 이상·4층은 A키만)</small></h2>' +
+    '<datalist id="cfnames">' + [...known].sort((a, b) => a.localeCompare(b, 'ko')).map(n => '<option value="' + esc(n) + '">').join('') + '</datalist>' +
+    '<div class="cf-grid"><b>층</b><b>A키</b><b>B키</b>';
+  for (let f = 31; f >= 4; f--) {
+    const a = F.aKey[f] || '', b = F.bKey[f] || '', hasB = f < 27 && f !== 4;
+    h += '<span class="cf-f">' + f + 'F</span><span><input list="cfnames" data-ck="a:' + f + '" value="' + esc(a) + '" placeholder="-">' + warn(a) + '</span>' +
+      '<span>' + (hasB ? '<input list="cfnames" data-ck="b:' + f + '" value="' + esc(b) + '" placeholder="-">' + warn(b) : '') + '</span>';
+  }
+  h += '</div><p class="note">비워 두면 그 층·구역은 담당 없이 남는 분이 맡아요. 같은 분이 두 층을 맡을 수 있어요 (예: 이분남 4·31층).</p></div>';
+  h += '<div class="card"><h2>정량 <small>기본 정비수 — 없으면 9</small></h2><p class="note" style="margin:0 0 8px">정규A 전환자 8 · 신입 단계 유닛(주마다 1실 증량) · 8 미만 = 신입으로 보고 로얄·층 이동을 줄여요.</p>' +
+    F.quota.map((x, i) => '<div class="cf-q"><input list="cfnames" data-ck="qn:' + i + '" value="' + esc(x.name) + '" placeholder="이름"><input type="number" min="1" max="15" inputmode="numeric" data-ck="qv:' + i + '" value="' + esc(x.v) + '"><button class="vp-x" data-as="cfqdel" data-v="' + i + '" aria-label="빼기">✕</button></div>').join('') +
+    '<button class="big-btn sec" style="margin-top:8px" data-as="cfqadd">+ 정량 한 분 추가</button></div>';
+  h += '<div class="card"><h2>로얄 · 2901</h2><label class="asg-prev" style="grid-template-columns:110px 1fr"><span>로얄 가능자</span><input id="cfroyal" value="' + esc(F.royal) + '"></label>' +
+    '<label class="asg-prev" style="grid-template-columns:110px 1fr"><span>2901 파란 명단</span><input id="cfblue" value="' + esc(F.blue) + '"></label>' +
+    '<p class="note">로얄 3001·3002·3101·3102 는 가능자만 맡아요. 2901 은 파란 명단 → 로얄 가능자 순으로 3명 (로얄 2실 맡은 분·전날 한 분은 뒤로). 이름은 쉼표로.</p></div>';
+  if (F.err) h += '<p class="err">' + esc(F.err) + '</p>';
+  h += '<div class="btn2"><button class="big-btn sec" data-as="cfx">취소</button><button class="big-btn" data-as="cfsave"' + (F.saving ? ' disabled' : '') + '>' + (F.saving ? '저장 중…' : '저장') + '</button></div>' +
+    '<p style="text-align:center"><button class="sb-link" style="border:0;background:none;color:var(--muted);text-decoration:underline;font:600 13px inherit;cursor:pointer" data-as="cfdef">기본값(26.10~27.3 담당표)으로 되돌리기</button></p>' +
+    (A.cfgDoc && A.cfgDoc.cfgBy ? '<p class="note" style="text-align:center">마지막 저장: ' + esc(A.cfgDoc.cfgBy) + '</p>' : '');
+  return h;
+}
+
 // ---------- 그리기
 function draw() {
   const box = document.getElementById('asp'); if (!box || !A) return;
   const esc = H.esc, y = box.scrollTop;
-  let h = '<div class="vp-in"><div class="vp-head"><h2>🧩 자동 배정 <small style="font-size:13px;color:var(--muted);font-weight:600">시험 · 대조</small></h2><button class="vp-x" data-as="close" aria-label="닫기">✕</button></div>';
+  let h = '<div class="vp-in"><div class="vp-head"><h2>🧩 자동 배정 <small style="font-size:13px;color:var(--muted);font-weight:600">' + (A.view === 'cfg' ? '담당표·정량' : '시험 · 대조') + '</small></h2><button class="vp-x" data-as="' + (A.view === 'cfg' ? 'cfx' : 'close') + '" aria-label="닫기">✕</button></div>';
+  if (A.view === 'cfg') { box.innerHTML = h + cfgHtml() + '</div>'; box.scrollTop = y; return; }
+  if (A.saved) h += '<p class="okbox">' + esc(A.saved) + '</p>';
+  h += '<button class="big-btn sec" style="margin:0 0 12px" data-as="cfg">⚙️ 담당표 · 정량 · 로얄/2901 설정</button>';
   // 1 날짜·파일
   const t0 = H.ymd(), t1 = H.addDays(t0, 1);
   h += '<div class="card"><h2>1 · 정비보고서</h2><div class="seg2">' + [[t0, '오늘'], [t1, '내일']].map(([d, l]) => '<button data-as="date" data-v="' + d + '" aria-pressed="' + (A.date === d) + '">' + l + ' ' + H.md(d) + '</button>').join('') + '</div>' +
@@ -238,6 +303,14 @@ document.addEventListener('click', e => {
   const a = t.getAttribute('data-as'), v = t.getAttribute('data-v');
   const pv = document.getElementById('asprev'); if (pv) A.prev = pv.value;
   if (a === 'close') { close(); return; }
+  A.saved = '';
+  if (a === 'cfg') { cfgOpen(); return; }
+  if (a === 'cfx') { A.view = ''; A.cf = null; draw(); return; }
+  if (a === 'cfsave') { cfgSave(); return; }
+  if (a === 'cfqadd') { cfgRead(); A.cf.quota.push({ name: '', v: 8 }); draw(); return; }
+  if (a === 'cfqdel') { cfgRead(); A.cf.quota.splice(Number(v), 1); draw(); return; }
+  if (a === 'cfdef') { if (!confirm('담당표·정량·로얄/2901 을 기본값(26.10~27.3 담당표)으로 되돌릴까요? 저장을 눌러야 바뀌어요.')) return;
+    A.cf = { aKey: Object.assign({}, DEF_CFG.aKey), bKey: Object.assign({}, DEF_CFG.bKey), royal: DEF_CFG.royalOk.join(', '), blue: DEF_CFG.pltBlue.join(', '), quota: Object.keys(DEF_CFG.quota).map(n => ({ name: n, v: DEF_CFG.quota[n] })), err: '', saving: false }; draw(); return; }
   if (a === 'pick') { pick(); return; }
   if (a === 'date') { if (A.date === v) return; A.date = v; A.data = null; A.done = null; A.res = null; A.cmp = null; A.file = ''; draw(); return; }
   if (a === 'tog') { const r = A.rows.find(x => x.name === v); if (r) { r.on = !r.on; A.res = null; A.cmp = null; } draw(); return; }

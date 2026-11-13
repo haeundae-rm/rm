@@ -12,7 +12,7 @@
 // 2단계 ③ (2026-11-13): 📣 고객만족도 VOC — 정비 레포트 voc.js 를 그대로 불러와 허브 전체 화면에서 씀 (같은 voc/{id} 문서). 열려 있는 동안만 voc 구독
 import * as S from '../app/store.js';
 
-const VER = '2026.11.13-7';
+const VER = '2026.11.13-8';
 const ADMINS = [
   { uid: 'iw2orXgIgPgTbLUQa0b41XJ9Dvd2', label: '소장', email: 'unieshaeundae+admin@gmail.com' },
   { uid: 'Fz4T5ZzIxShOdVkNpF9gzMmOLED2', label: '부소장', email: 'unieshaeundae+sub@gmail.com' }
