@@ -238,7 +238,8 @@
     C.api.save(id, d).then(function () {
       if (!F) return;
       F.saving = false; F.edit = null; F.msg = d.name + ' 님을 저장했어요.';
-      upsert(id, d); changed(); draw();
+      var old = e.isNew ? '' : String((F.list.filter(function (x) { return x.id === id; })[0] || {}).name || '');
+      upsert(id, d); changed(old && key(old) !== key(d.name) ? { renamedFrom: old } : null); draw();   // 11/14: 이름을 고치면 예전 이름은 이름 고르기 목록에서 뺌
     }, function (x) { if (!F) return; F.saving = false; e.err = '저장하지 못했어요: ' + (x && (x.code || x.message) || x); draw(); });
   }
   function editDel() {
