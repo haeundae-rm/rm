@@ -1053,7 +1053,7 @@ document.addEventListener('click', e => {
   arm();
   const t = e.target, at = s => t.closest(s);
   if (at('[data-snd]')) { const on = !soundOn(); lsSet('rm_sound', on ? 'on' : 'off'); render(); toast(on ? '소리를 켰어요 🔊' : '소리를 껐어요 · 진동만 울려요'); if (on) play('stamp'); return; }
-  if (at('[data-reload]')) { location.reload(); return; }
+  if (at('[data-reload]')) { const u = new URL(location.href); u.searchParams.set('r', newVer || Date.now()); location.replace(u.href); return; }   // 11/18: 주소를 바꿔 열어야 휴대폰에 남은 옛 화면(10분 캐시)을 건너뜀
   if (at('[data-failx]')) { lsSet(failKey(), JSON.stringify(lsJson(failKey(), []).filter(f => f.date !== today))); update(); return; }
   if (at('#sheet')) { onSheet(t, at); return; }
   if (!data) return;
