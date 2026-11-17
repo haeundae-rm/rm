@@ -160,6 +160,8 @@ const CAUTION = /시설|악취|막힘|고장|분실|지갑|찾기|파손|누수|
 const D = '\\p{Nd}';
 const TIME_UNTIL = new RegExp('(?:~\\s*)?(' + D + '{1,2})\\s*시\\s*(반|' + D + '{1,2}\\s*분)?\\s*(?:까지)?', 'u');
 const TIME_AFTER = new RegExp('(' + D + '{1,2})\\s*시\\s*(반)?\\s*이후', 'u');
+// 11/18: '10시~' · '10시부터' = 그 시각부터 정비 (예전엔 '~' 때문에 '10시까지'로 잘못 읽음). '~10시' 처럼 물결이 앞이면 그대로 '까지'
+const TIME_FROM = new RegExp('(' + D + '{1,2})\\s*시\\s*(반)?\\s*(?:~|부터)(?!\\s*' + D + ')', 'u');
 const TIME_PRIO = new RegExp('(' + D + '{1,2})\\s*시\\s*(?:(반)|(' + D + '{1,2})\\s*분)?\\s*우선', 'u');
 const TIME_RANGE = new RegExp('(' + D + '{1,2})\\s*시\\s*(반)?\\s*[~\\-]\\s*(' + D + '{1,2})\\s*시\\s*(반)?', 'u');
 const ORDER = ['14시까지', '마감', '테마', '재실', '연박·재입', '룸체', 'VIP', '단체', '당직', '학단 회수', '학단 복구', '학단', '주의'];
@@ -186,11 +188,13 @@ function makeRows(d, day) {
     if (memo.includes('당직')) tags.push('당직');
     let m = TIME_AFTER.exec(memo);
     if (m) after = pad2(pint(m[1])) + ':' + (m[2] ? '30' : '00');
+    if (!m) { const mf = TIME_FROM.exec(memo); if (mf) { const h = pint(mf[1]); if (h >= 6 && h <= 23) after = pad2(h) + ':' + (mf[2] ? '30' : '00'); } }
     const rng = TIME_RANGE.exec(memo);
     if (rng) { after = pad2(pint(rng[1])) + ':' + (rng[2] ? '30' : '00'); due = pad2(pint(rng[3])) + ':' + (rng[4] ? '30' : '00'); }
     for (const x of [r.m1, r.m2]) {
       const s = String(x || '');
       if (rng || s.includes('이후') || !(s.includes('까지') || s.includes('~'))) continue;
+      if (TIME_FROM.test(s) && !s.includes('까지')) continue;   // '10시~' 는 시작 시각
       const mm = TIME_UNTIL.exec(s);
       if (mm) {
         const h = pint(mm[1]), g2 = mm[2] || '';
@@ -218,7 +222,7 @@ function makeRows(d, day) {
     const hm = t => t.slice(0, 2).replace(/^0+/, '') + '시' + (t.endsWith(':00') ? '' : ' ' + t.slice(3) + '분');
     if (due && after) n.push(hm(after) + '~' + hm(due) + ' 사이 정비');
     else if (due) n.push(due.slice(0, 2).replace(/^0+/, '') + '시' + (due.endsWith(':00') ? '' : ' ' + due.slice(3) + '분') + '까지 우선 정비');
-    if (after && !due) n.push(after.slice(0, 2).replace(/^0+/, '') + '시 이후 정비');
+    if (after && !due) n.push(hm(after) + ' 이후 정비');
     if (tags.includes('재실')) n.push('고객 외출 시 정비');
     if (tags.includes('룸체')) n.push('룸 변경 후 정비 가능');
     if (tags.includes('당직')) n.push('퇴실 유무 문의 요망');
