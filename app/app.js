@@ -5,12 +5,16 @@ import { setupMyWork } from './mywork.js';
 import { makeLeaveApi } from './leave_my.js';
 import { setupVoc } from './voc.js';
 
-const APP_VER = '2026.11.18-3';
+const APP_VER = '2026.11.18-4';
 // 관리자 = 보안 규칙 isAdmin 과 같은 목록 (UID 는 공개돼도 되는 값)
 const ADMINS = [
   { uid: 'iw2orXgIgPgTbLUQa0b41XJ9Dvd2', label: '소장', email: 'unieshaeundae+admin@gmail.com' },
-  { uid: 'Fz4T5ZzIxShOdVkNpF9gzMmOLED2', label: '부소장', email: 'unieshaeundae+sub@gmail.com' }
+  { uid: 'Fz4T5ZzIxShOdVkNpF9gzMmOLED2', label: '부소장', email: 'unieshaeundae+sub@gmail.com' },
+  // 하우스키퍼 공용 계정 (2026-11-18, 야간 방배정 · 오더테이커): 관리자 화면은 같고 '명단'(직원 명단 고치기) 탭만 없음. uid 는 계정 만든 뒤 채움
+  { uid: '', label: '하우스키퍼', email: 'unieshaeundae+hk@gmail.com', hk: true }
 ];
+const isAdmUser = (a, u) => !!u && !u.anon && ((a.uid && a.uid === u.uid) || (!a.uid && a.email === u.email));
+const isHk = () => ADMINS.some(a => a.hk && isAdmUser(a, user));
 const BOT_UID = 'wytSL9o4vvN4U2G3z6R64hafC9t2';
 const OLD_APP = 'https://script.google.com/macros/s/AKfycbzZt79EW2oUCbcfayJ-TDzV8Bb3uxo67VzbFqC0ACy-Savl-LhrrDEvsdCR4vvKTvFF/exec';
 const ITEMS = [
@@ -101,7 +105,7 @@ S.onUser(u => {
 function stopAll() { subs.concat(meSubs).forEach(f => { try { f(); } catch (e) {} }); subs = []; meSubs = []; try { VOC.stop(); } catch (e) {} }
 function start() {
   stopAll();
-  isAdm = ADMINS.some(a => a.uid === user.uid);
+  isAdm = ADMINS.some(a => isAdmUser(a, user));
   if (HUB && !isAdm) try { window.parent.postMessage({ hub: 'noadmin' }, location.origin); } catch (e) {}
   today = seoulDate(); me = null; devState = isAdm ? 'ok' : 'wait';
   dayDoc = undefined; myPlan = null; plans = {}; chgDocs = []; recDocs = []; ackDocs = []; devices = []; relay = null; pastAcks = {};
@@ -370,7 +374,7 @@ function render() {
     if (h && h.textContent !== t) h.textContent = t;
     const dt = isAdm ? '객실 통합 관리 시스템' : '정비 레포트'; if (document.title !== dt) document.title = dt; }
   if (isAdm) {
-    $('#bar').innerHTML = '<div class="mebar"><span class="mechip">관리자 · ' + esc((ADMINS.filter(a => a.uid === user.uid)[0] || {}).label || '') + '</span>' + noticeBtn(null) + sndBtn() + '</div>';
+    $('#bar').innerHTML = '<div class="mebar"><span class="mechip">관리자 · ' + esc((ADMINS.filter(a => isAdmUser(a, user))[0] || {}).label || '') + '</span>' + noticeBtn(null) + sndBtn() + '</div>';
     if (viewMaid && maidOf(viewMaid)) renderMaid(adminView(viewMaid), true); else { viewMaid = null; renderAdmin(); }
   } else if (!me) { $('#bar').innerHTML = ''; renderPicker(); }
   else if (data.noPlan) {
@@ -583,7 +587,7 @@ function repDoc(d0, r, who) {
     rooms: (r.data.rooms || []).map(x => { const o = { room: String(x.room), st: v(x.st) }; if (x.name) o.name = String(x.name); return o; }) };
 }
 function upSend(d0) {
-  const r = d0.res, s = r.summary, who = (ADMINS.filter(a => a.uid === user.uid)[0] || {}).label || '';
+  const r = d0.res, s = r.summary, who = (ADMINS.filter(a => isAdmUser(a, user))[0] || {}).label || '';
   busy = true; drawDlg();
   // 2026-11-12: 정비 지원 '더티 배분 만들기'가 파일 없이 그날 것을 불러오게 카드(메이드·배정수량)·객실(담당·상태)도 날짜별로 남김.
   //   uploads/rep_{날짜} — 관리자만 읽음(규칙 v3 그대로). 중계는 uploads/latest 만 보니 영향 없음. 실패해도 배정 올리기는 그대로 진행
@@ -676,6 +680,7 @@ function adminView(n) {
 // 관리자 화면 = 메뉴(탭) 4개: 오늘 현황 · 배정 · VOC · 설정 (2026-11-07). 문제는 맨 위 빨간 띠로만
 let admTab = (() => { try { return localStorage.getItem('rm_admtab') || 'today'; } catch (e) { return 'today'; } })(), mgSort = 'order';
 const ADM_TABS = [['today', '오늘 현황'], ['assign', '배정'], ['voc', 'VOC'], ['staff', '명단'], ['set', '설정']];
+const admTabs = () => ADM_TABS.filter(t => !(t[0] === 'staff' && isHk()));
 function admAlerts() {
   const out = [];
   if (data.noPlan) out.push('<button class="aal" data-atab="assign">⚠ 오늘 배정이 아직 앱에 없어요 · <b>배정 → 정비보고서 올리기</b></button>');
@@ -697,7 +702,7 @@ function sortedMaids() {
 function renderAdmin() {
   shownM = null;
   if (HUB) admTab = HUB;
-  if (!ADM_TABS.some(t => t[0] === admTab)) admTab = 'today';
+  if (!admTabs().some(t => t[0] === admTab)) admTab = 'today';
   let all = 0, done = 0; const issues = [], dueRows = [];
   data.maids.forEach(m => m.rooms.forEach(x => {
     all += W(x.room); const r = recOf(m.name, x.room); if (r) done += W(x.room);
@@ -709,7 +714,7 @@ function renderAdmin() {
   const badge = { assign: data.noPlan || (cmp && cmp.day === today && !cmp.ok) ? '!' : '', set: errDocs.length ? String(errDocs.length) : '', today: dueRows.filter(o => o.x.due <= now).length ? '!' : '' };
   let html = HUB ? bands() : bands() + '<div class="amode"><b>관리자 모드</b><span>' + esc(data.label || '') + '</span>' +
     '<button class="ghost" data-admin-off="1">관리자 모드 끄기</button></div>' + admAlerts() +
-    '<nav class="atabs">' + ADM_TABS.map(t => '<button data-atab="' + t[0] + '" aria-pressed="' + (admTab === t[0]) + '">' + t[1] + (badge[t[0]] ? '<i>' + badge[t[0]] + '</i>' : '') + '</button>').join('') + '</nav>';
+    '<nav class="atabs">' + admTabs().map(t => '<button data-atab="' + t[0] + '" aria-pressed="' + (admTab === t[0]) + '">' + t[1] + (badge[t[0]] ? '<i>' + badge[t[0]] + '</i>' : '') + '</button>').join('') + '</nav>';
   if (admTab === 'today') {
     html += '<div class="kpis"><div class="kpi"><b>' + done + '<small style="font-size:14px">/' + all + '</small></b><span>완료 객실</span></div><div class="kpi"><b>' + dueRows.length + '</b><span>시간 정해진 미완료</span></div><div class="kpi"><b>' + issues.length + '</b><span>메모 남긴 객실</span></div></div>';
     html += '<div class="mghead"><p class="sec" style="margin:0">메이드별 진행 (' + data.maids.length + '명)</p><div class="mgsort">' + [['order', '배정순'], ['low', '진행 낮은 순'], ['floor', '층별']].map(o => '<button data-mgsort="' + o[0] + '" aria-pressed="' + (mgSort === o[0]) + '">' + o[1] + '</button>').join('') + '</div></div>';
@@ -1198,7 +1203,7 @@ function openStaff() {
   sc.onload = go; sc.onerror = () => say('명단 화면을 못 불러왔어요. 인터넷을 확인하고 다시 눌러 주세요.');
   document.head.appendChild(sc);
 }
-const VOC = setupVoc({ S, esc, say, today: () => today, update: () => update(), render: () => { if (isAdm && admTab === 'voc' && !viewMaid && !dlg) { const y = window.scrollY; render(); window.scrollTo(0, y); } }, isAdm: () => isAdm, who: () => (ADMINS.filter(a => user && a.uid === user.uid)[0] || {}).label || '' });
+const VOC = setupVoc({ S, esc, say, today: () => today, update: () => update(), render: () => { if (isAdm && admTab === 'voc' && !viewMaid && !dlg) { const y = window.scrollY; render(); window.scrollTo(0, y); } }, isAdm: () => isAdm, who: () => (ADMINS.filter(a => isAdmUser(a, user))[0] || {}).label || '' });
 const leaveCall = makeLeaveApi(S, () => user && user.uid);   // 2026-11-18 연차 Firebase 전환 (옛 callOld 대신)
 const MW = setupMyWork({ esc, lsGet, lsSet, toast, vibe, call: (fn, a, as) => leaveCall(fn, a, as, me), me: () => me, mate: () => mateOf(me), pair: () => { const mt = mateOf(me); return (teamPairs.filter(p => p.indexOf(me) >= 0)[0] || [me, mt]).slice(); }, isAdm: () => isAdm, dlg: () => dlg, setDlg: d => { dlg = d; }, closeDlg: () => closeDlg() });
 
