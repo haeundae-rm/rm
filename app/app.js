@@ -10,8 +10,8 @@ const APP_VER = '2026.11.18-4';
 const ADMINS = [
   { uid: 'iw2orXgIgPgTbLUQa0b41XJ9Dvd2', label: '소장', email: 'unieshaeundae+admin@gmail.com' },
   { uid: 'Fz4T5ZzIxShOdVkNpF9gzMmOLED2', label: '부소장', email: 'unieshaeundae+sub@gmail.com' },
-  // 하우스키퍼 공용 계정 (2026-11-18, 야간 방배정 · 오더테이커): 관리자 화면은 같고 '명단'(직원 명단 고치기) 탭만 없음. uid 는 계정 만든 뒤 채움
-  { uid: '', label: '하우스키퍼', email: 'unieshaeundae+hk@gmail.com', hk: true }
+  // 하우스키퍼 공용 계정 (2026-11-18, 야간 방배정 · 오더테이커): 관리자 화면은 같고 '명단'(직원 명단 고치기) 탭만 없음. uid = 11/18 만든 공용 계정
+  { uid: 'nBL2QYezEmRNRmBRMXN6LNPJO2s2', label: '하우스키퍼', email: 'unieshaeundae+hk@gmail.com', hk: true }
 ];
 const isAdmUser = (a, u) => !!u && !u.anon && ((a.uid && a.uid === u.uid) || (!a.uid && a.email === u.email));
 const isHk = () => ADMINS.some(a => a.hk && isAdmUser(a, user));
