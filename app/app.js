@@ -5,7 +5,7 @@ import { setupMyWork } from './mywork.js';
 import { makeLeaveApi } from './leave_my.js';
 import { setupVoc } from './voc.js';
 
-const APP_VER = '2026.11.18-4';
+const APP_VER = '2026.11.19-1';
 // 관리자 = 보안 규칙 isAdmin 과 같은 목록 (UID 는 공개돼도 되는 값)
 const ADMINS = [
   { uid: 'iw2orXgIgPgTbLUQa0b41XJ9Dvd2', label: '소장', email: 'unieshaeundae+admin@gmail.com' },
@@ -758,7 +758,7 @@ function renderAdmin() {
       '기존 직원과 본사 입사일 자료는 「엑셀 붙여넣기」로 한 번에 넣을 수 있어요.</p><div class="acts"><button class="go" data-staffopen="1">명단 열기</button></div>' +
       '<p class="rec" style="margin:8px 0 0">정비보조 명단은 정비 지원 앱 관리자 화면에서 관리해요. 명단은 열 때 한 번만 읽어요.</p></div>';
   } else {
-    html += '<div class="card"><h3>공지 · 연차 관리</h3><p class="rec" style="margin:0 0 6px">연차 승인·휴대폰 승인은 허브 연차 관리에서 해요. 공지 올리기는 아직 기존 앱에서 해요.</p><div class="acts"><a class="go" style="text-decoration:none;text-align:center" href="/hub/leave/" target="_blank" rel="noopener">📋 연차 관리 열기</a><a class="go" style="text-decoration:none;text-align:center" href="' + OLD_APP + '" target="_blank" rel="noopener">📢 공지 (기존 앱)</a></div></div>';
+    if (!HUB) html += '<div class="card"><h3>공지 · 연차 관리</h3><p class="rec" style="margin:0 0 6px">공지 올리기 · 연차 승인 · 휴대폰 승인은 허브에서 해요.</p><div class="acts"><a class="go" style="text-decoration:none;text-align:center" href="/hub/#field" target="_blank" rel="noopener">📢 공지 올리기</a><a class="go" style="text-decoration:none;text-align:center" href="/hub/leave/" target="_blank" rel="noopener">📋 연차 관리 열기</a></div></div>';   // 11/19: 옛 앱 공지 링크 뺌 (공지는 허브 notice.js) · 허브 안 창에선 안 보임 (허브에 이미 있음)
   if (nts.length) html += '<div class="card"><h3>공지 확인</h3><div class="list">' + nts.map(n => {
     const tg = data.maids.filter(m => !(n.targets && n.targets.length) || n.targets.indexOf(m.name) >= 0).map(m => m.name);
     const ok = tg.filter(nm => acked(n, nm)), no = tg.filter(nm => !acked(n, nm));
