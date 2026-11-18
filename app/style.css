@@ -533,3 +533,7 @@ body.adm main>.alert{background:var(--red-soft);color:var(--warn-red)}
 .vper button{border:1px solid var(--line);background:var(--surface);border-radius:8px;width:32px;height:32px;font:700 16px var(--f-body);cursor:pointer;color:var(--ink)}
 .vcsv{border:1.5px solid #1f8a4c;color:#1f8a4c;background:var(--surface);border-radius:99px;padding:6px 12px;font:800 13px var(--f-body);cursor:pointer}
 .kpis .kpi.vgood b{color:#1f8a4c}
+
+/* 허브 안에서 열기 (2026-11-18): 머리 줄 숨김 — 허브 창 위쪽에 제목·닫기 버튼이 있음 */
+html.inhub body>header.top{display:none}
+html.inhub main{padding-top:12px}

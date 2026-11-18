@@ -5,7 +5,7 @@ import { setupMyWork } from './mywork.js';
 import { makeLeaveApi } from './leave_my.js';
 import { setupVoc } from './voc.js';
 
-const APP_VER = '2026.11.18-2';
+const APP_VER = '2026.11.18-3';
 // 관리자 = 보안 규칙 isAdmin 과 같은 목록 (UID 는 공개돼도 되는 값)
 const ADMINS = [
   { uid: 'iw2orXgIgPgTbLUQa0b41XJ9Dvd2', label: '소장', email: 'unieshaeundae+admin@gmail.com' },
@@ -31,6 +31,10 @@ const DARKTXT = { '테마': 1, '당직': 1 }, LIGHT = { '학단 복구': 1 };
 const VENT_FROM = '12:00', VENT_TO = '13:30';
 
 // ---------- 상태
+// 허브 안에서 열기 (2026-11-18): 허브가 ?hub=today|assign|set 로 이 화면을 창(iframe) 안에 띄움 → 관리자 그 탭만, 머리·탭 줄·'관리자 모드 끄기' 숨김
+// 주소에 ?hub= 가 없거나 창 안이 아니면 아무것도 안 함 (메이드 휴대폰 영향 없음)
+const HUB = (() => { const m = /[?&]hub=(today|assign|set)\b/.exec(location.search); return m && window.parent !== window ? m[1] : ''; })();
+if (HUB) document.documentElement.classList.add('inhub');
 let user = null, isAdm = false, me = null, devState = 'wait';   // devState: wait / none / ok
 let today = seoulDate(), dayDoc = undefined, dayCache = false, cacheSince = 0;
 let myPlan = null, plans = {}, chgDocs = [], recDocs = [], ackDocs = [], notices = [], devices = [], relay = null;
@@ -98,6 +102,7 @@ function stopAll() { subs.concat(meSubs).forEach(f => { try { f(); } catch (e) {
 function start() {
   stopAll();
   isAdm = ADMINS.some(a => a.uid === user.uid);
+  if (HUB && !isAdm) try { window.parent.postMessage({ hub: 'noadmin' }, location.origin); } catch (e) {}
   today = seoulDate(); me = null; devState = isAdm ? 'ok' : 'wait';
   dayDoc = undefined; myPlan = null; plans = {}; chgDocs = []; recDocs = []; ackDocs = []; devices = []; relay = null; pastAcks = {};
   data = null; viewMaid = null; dlg = null; drawDlg();
@@ -691,6 +696,7 @@ function sortedMaids() {
 }
 function renderAdmin() {
   shownM = null;
+  if (HUB) admTab = HUB;
   if (!ADM_TABS.some(t => t[0] === admTab)) admTab = 'today';
   let all = 0, done = 0; const issues = [], dueRows = [];
   data.maids.forEach(m => m.rooms.forEach(x => {
@@ -701,7 +707,7 @@ function renderAdmin() {
   dueRows.sort((a, b) => (a.x.due < b.x.due ? -1 : a.x.due > b.x.due ? 1 : Number(a.x.room) - Number(b.x.room)));
   const now = nowHM(), nts = data.notices || [];
   const badge = { assign: data.noPlan || (cmp && cmp.day === today && !cmp.ok) ? '!' : '', set: errDocs.length ? String(errDocs.length) : '', today: dueRows.filter(o => o.x.due <= now).length ? '!' : '' };
-  let html = bands() + '<div class="amode"><b>관리자 모드</b><span>' + esc(data.label || '') + '</span>' +
+  let html = HUB ? bands() : bands() + '<div class="amode"><b>관리자 모드</b><span>' + esc(data.label || '') + '</span>' +
     '<button class="ghost" data-admin-off="1">관리자 모드 끄기</button></div>' + admAlerts() +
     '<nav class="atabs">' + ADM_TABS.map(t => '<button data-atab="' + t[0] + '" aria-pressed="' + (admTab === t[0]) + '">' + t[1] + (badge[t[0]] ? '<i>' + badge[t[0]] + '</i>' : '') + '</button>').join('') + '</nav>';
   if (admTab === 'today') {
@@ -729,7 +735,7 @@ function renderAdmin() {
   html += '<div class="card"><h3>객실 메모</h3><p class="rec" style="margin:0 0 6px">하자·악취 등 접수는 카톡·전화로 받아요. 여기는 메이드가 남긴 참고 메모예요.</p><div class="list">' + (issues.length ? issues.map(o =>
     '<div class="r"><span><b>' + esc(o.x.room) + '</b> · ' + esc(o.m.name) + (o.r.issues.length ? ' · ' + esc(o.r.issues.join(', ')) : '') + (o.r.memo ? '<br><small>' + esc(o.r.memo) + '</small>' : '') + '</span><span>' + hm(o.r.at) + '</span></div>').join('') : '<div class="r"><span>아직 없어요.</span><span></span></div>') + '</div></div>';
   } else if (admTab === 'assign') {
-    html += '<div class="card"><h3>연결 상태</h3><div>' + relayLine() + '</div>' + cmpLine() + '</div>' + upCard() + vfCard();
+    html += '<div class="card"><h3>연결 상태</h3><div>' + relayLine() + '</div>' + cmpLine() + '</div>' + (HUB ? '' : upCard()) + vfCard();   // 허브 안에선 정비보고서 올리기는 허브 쪽에 있음
   const chg = data.changes || [];
     if (chg.length) {
       const owner = {}; data.maids.forEach(m => m.rooms.forEach(x => { (owner[x.room] = owner[x.room] || []).push(m.name); }));
@@ -1043,7 +1049,7 @@ document.addEventListener('keydown', e => { if (dlg && e.key === 'Enter' && /^(l
 
 // ---------- 누르기
 let armed = false;
-function arm() { if (!armed) { try { history.pushState({ rm: 1 }, ''); armed = true; } catch (e) {} } }
+function arm() { if (HUB) return; if (!armed) { try { history.pushState({ rm: 1 }, ''); armed = true; } catch (e) {} } }
 window.addEventListener('popstate', () => {   // 휴대폰 뒤로가기: 앱 안에서만 처리
   armed = false; arm();
   if (dlg) { if (dlg.kind === 'notice' && dlg.must) return; if (!busy) closeDlg(); return; }
