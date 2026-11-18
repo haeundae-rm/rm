@@ -2,9 +2,10 @@
 // 2026-10-31 Firebase 이전 4단계. 데이터 읽기·쓰기는 store.js 한 곳
 import * as S from './store.js';
 import { setupMyWork } from './mywork.js';
+import { makeLeaveApi } from './leave_my.js';
 import { setupVoc } from './voc.js';
 
-const APP_VER = '2026.11.18-1';
+const APP_VER = '2026.11.18-2';
 // 관리자 = 보안 규칙 isAdmin 과 같은 목록 (UID 는 공개돼도 되는 값)
 const ADMINS = [
   { uid: 'iw2orXgIgPgTbLUQa0b41XJ9Dvd2', label: '소장', email: 'unieshaeundae+admin@gmail.com' },
@@ -746,7 +747,7 @@ function renderAdmin() {
       '기존 직원과 본사 입사일 자료는 「엑셀 붙여넣기」로 한 번에 넣을 수 있어요.</p><div class="acts"><button class="go" data-staffopen="1">명단 열기</button></div>' +
       '<p class="rec" style="margin:8px 0 0">정비보조 명단은 정비 지원 앱 관리자 화면에서 관리해요. 명단은 열 때 한 번만 읽어요.</p></div>';
   } else {
-    html += '<div class="card"><h3>공지 · 연차 관리</h3><p class="rec" style="margin:0 0 6px">공지 올리기·연차 승인은 아직 기존 앱에서 해요.</p><div class="acts"><a class="go" style="text-decoration:none;text-align:center" href="' + OLD_APP + '" target="_blank" rel="noopener">📢 공지 · 📋 연차 관리 열기</a></div></div>';
+    html += '<div class="card"><h3>공지 · 연차 관리</h3><p class="rec" style="margin:0 0 6px">연차 승인·휴대폰 승인은 허브 연차 관리에서 해요. 공지 올리기는 아직 기존 앱에서 해요.</p><div class="acts"><a class="go" style="text-decoration:none;text-align:center" href="/hub/leave/" target="_blank" rel="noopener">📋 연차 관리 열기</a><a class="go" style="text-decoration:none;text-align:center" href="' + OLD_APP + '" target="_blank" rel="noopener">📢 공지 (기존 앱)</a></div></div>';
   if (nts.length) html += '<div class="card"><h3>공지 확인</h3><div class="list">' + nts.map(n => {
     const tg = data.maids.filter(m => !(n.targets && n.targets.length) || n.targets.indexOf(m.name) >= 0).map(m => m.name);
     const ok = tg.filter(nm => acked(n, nm)), no = tg.filter(nm => !acked(n, nm));
@@ -1192,7 +1193,8 @@ function openStaff() {
   document.head.appendChild(sc);
 }
 const VOC = setupVoc({ S, esc, say, today: () => today, update: () => update(), render: () => { if (isAdm && admTab === 'voc' && !viewMaid && !dlg) { const y = window.scrollY; render(); window.scrollTo(0, y); } }, isAdm: () => isAdm, who: () => (ADMINS.filter(a => user && a.uid === user.uid)[0] || {}).label || '' });
-const MW = setupMyWork({ esc, lsGet, lsSet, toast, vibe, call: callOld, me: () => me, mate: () => mateOf(me), pair: () => { const mt = mateOf(me); return (teamPairs.filter(p => p.indexOf(me) >= 0)[0] || [me, mt]).slice(); }, isAdm: () => isAdm, dlg: () => dlg, setDlg: d => { dlg = d; }, closeDlg: () => closeDlg() });
+const leaveCall = makeLeaveApi(S, () => user && user.uid);   // 2026-11-18 연차 Firebase 전환 (옛 callOld 대신)
+const MW = setupMyWork({ esc, lsGet, lsSet, toast, vibe, call: (fn, a, as) => leaveCall(fn, a, as, me), me: () => me, mate: () => mateOf(me), pair: () => { const mt = mateOf(me); return (teamPairs.filter(p => p.indexOf(me) >= 0)[0] || [me, mt]).slice(); }, isAdm: () => isAdm, dlg: () => dlg, setDlg: d => { dlg = d; }, closeDlg: () => closeDlg() });
 
 // =====================================================================
 // 휴대폰 오류 자동 기록 → Firestore errors (관리자 화면 '📵 휴대폰 오류'). 같은 오류는 한 번, 한 번 열 때 최대 5건

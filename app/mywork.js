@@ -1,5 +1,5 @@
-// 내 근무 · 연차 신청 (새 앱) — 화면은 지금 앱 MyWork.html 그대로, 서버는 기존 Apps Script(MyWorkApi.gs → Leave.gs)
-// 본인 확인: Firebase 로그인 표(idToken) → Apps Script 가 등록 이름 확인. 내 근무 비밀번호 4자리는 지금처럼
+// 내 근무 · 연차 신청 (새 앱) — 화면은 옛 앱 MyWork.html 그대로
+// 2026-11-18: 서버를 Apps Script 에서 Firebase 로 (leave_my.js). 4자리 비밀번호 없앰 → 소장님이 허브 '연차 관리 → 휴대폰 승인'에서 승인한 휴대폰만 열림
 export function setupMyWork(ctx) {
   const { esc, lsGet, lsSet, toast, vibe } = ctx;
   const $ = s => document.querySelector(s);
@@ -49,7 +49,7 @@ export function setupMyWork(ctx) {
     mwRun('myWorkHello', [], h => {
       if (as && h && h.me && h.me !== as) { mw.stage = 'msg'; mw.err = as + ' 님 근무는 아직 볼 수 없어요. 관리자에게 "내 근무 서버 새 버전"을 말씀해 주세요.'; mwDraw(); return; }   // 서버가 아직 예전 버전 (짝 요청을 모름)
       mw.hello = h;
-      if (getTok()) load(''); else { mw.stage = 'pin'; mw.step = h.hasPin ? 'enter' : 'new1'; mwDraw(); focusPin(); }
+      load('');
     }, m => { mw.stage = 'msg'; mw.err = m; mwDraw(); });
   }
   function load(ym) {
@@ -122,7 +122,6 @@ export function setupMyWork(ctx) {
         (L.apps && L.canApply ? '<button class="mw-apply" data-mw="apply">✍ 연차 · 무급 휴가 신청하기</button>' : '') +
         appsHtml(L.apps || []) + '</div>';
     } else h += '<div class="mw-card"><h3>내 연차</h3><p class="mw-note" style="margin:0">연차 정보가 아직 연결되지 않았어요. 소장님께 문의해 주세요.</p></div>';
-    h += '<button class="mw-lock" data-mw="lock">이 휴대폰에서 내 근무 잠그기</button>';
     return h;
   }
   const ST = { '대기': ['wait', '승인 기다리는 중'], '승인': ['ok', '승인 ✔'], '반려': ['no', '반려'], '취소': ['off', '취소함'] };
