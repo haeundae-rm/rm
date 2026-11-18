@@ -85,5 +85,7 @@ export async function count(c, w) { const s = await getCountFromServer(q(c, w));
 
 // ---------- 쓰기: 화면엔 바로 반영(휴대폰 보관), 돌려주는 약속(promise)은 서버가 받아야 끝남
 export function set(path, data) { return setDoc(ref(path), enc(data)); }
+// 일부 칸만 바꾸기 (2026-11-18 연차: 메이드는 규칙상 정해진 칸만 고칠 수 있음)
+export function merge(path, data) { return setDoc(ref(path), enc(data), { merge: true }); }
 export function add(c, data) { const r = doc(col(c)); return { id: r.id, done: setDoc(r, enc(data)) }; }
 export function del(path) { return deleteDoc(ref(path)); }
