@@ -537,3 +537,46 @@ body.adm main>.alert{background:var(--red-soft);color:var(--warn-red)}
 /* 허브 안에서 열기 (2026-11-18): 머리 줄 숨김 — 허브 창 위쪽에 제목·닫기 버튼이 있음 */
 html.inhub body>header.top{display:none}
 html.inhub main{padding-top:12px}
+
+/* ---------- 🔑 플로어키 서명 (2026-11-19) — 객실 목록 위 키 띠 · 키 창 */
+.keyband{background:var(--surface);border:2px solid var(--done);border-radius:14px;padding:12px 14px;display:flex;flex-direction:column;gap:8px}
+.keyband.need{border-color:var(--issue);background:color-mix(in srgb,var(--issue) 6%,var(--surface));animation:kpulse 2.4s ease-in-out infinite}
+@keyframes kpulse{0%,100%{box-shadow:0 0 0 0 color-mix(in srgb,var(--issue) 0%,transparent)}50%{box-shadow:0 0 0 5px color-mix(in srgb,var(--issue) 22%,transparent)}}
+.keyband .kh b{display:block;font-size:17px;font-weight:900}
+.keyband.need .kh b{color:var(--issue)}
+.keyband .kh span{display:block;font-size:14px;color:var(--muted);margin-top:2px}
+.krow{display:flex;flex-wrap:wrap;align-items:center;gap:8px;border-top:1px solid var(--line);padding-top:8px}
+.krow .kf{font:800 20px var(--f-num);min-width:48px}
+.krow .kbtns{flex:1;display:grid;grid-template-columns:1fr 1fr 1.3fr;gap:6px}
+.krow .kbtns button,.kbig button,.kreasons button,.kall button{min-height:52px;border-radius:12px;border:2px solid var(--navy);background:var(--surface);color:var(--navy);font:900 17px var(--f-body);cursor:pointer;padding:4px 6px}
+.krow .kbtns .kno,.kbig .kno{border-color:var(--line);color:var(--muted);font-size:15px}
+.krow .koth,.panel .koth{flex-basis:100%;font-size:13px;color:var(--muted)}
+.krow.ok .kv{flex:1;font-weight:900;font-size:17px;color:var(--done)}
+.krow.ok .kv small{display:block;font-size:12px;font-weight:600;color:var(--muted)}
+.krow .kchg{min-height:44px;padding:0 14px;border-radius:10px;border:1px solid var(--line);background:var(--bg);color:var(--ink);font:700 14px var(--f-body);cursor:pointer}
+.kall{display:grid;grid-template-columns:1.4fr 1fr;gap:6px;border-top:1px dashed var(--line);padding-top:8px}
+.kall button{min-height:46px;font-size:15px;border-width:1.5px}
+.kbig{display:flex;flex-direction:column;gap:8px}
+.kbig button{min-height:60px;font-size:19px}
+.kbig.k4{display:grid;grid-template-columns:1fr 1fr}
+.kbig button[aria-pressed="true"],.kreasons button[aria-pressed="true"]{background:var(--navy);color:#fff}
+.kbig button:disabled{opacity:.35;cursor:default}
+.kreasons{display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px}
+.kreasons button{font-size:15px;border-width:1.5px}
+.kin{width:100%;min-height:48px;font:600 16px var(--f-body);padding:8px 10px;border-radius:10px;border:1.5px solid var(--line);background:var(--bg);color:var(--ink)}
+.kret{display:flex;flex-direction:column;gap:10px}
+.panel .kret p,.sum .keyret p{margin:0;font-size:18px;font-weight:800;color:var(--ink);line-height:1.45;background:var(--bg);border-radius:12px;padding:12px 14px}
+.sum .keyret{margin-top:10px;display:flex;flex-direction:column;gap:6px}
+.sum .keyret p{font-size:15px;padding:8px 12px}
+.keyband .kview{min-height:44px;border-radius:10px;border:1px dashed var(--navy);background:transparent;color:var(--navy);font:800 14px var(--f-body);cursor:pointer}
+.kwho{background:var(--bg);border-radius:12px;padding:10px 12px;font-size:15px;line-height:1.6}
+.klist{display:flex;flex-direction:column;border:1px solid var(--line);border-radius:12px;overflow:hidden}
+.kl{display:grid;grid-template-columns:56px 1fr 1fr;gap:6px;padding:7px 10px;border-top:1px solid var(--line);font-size:15px;align-items:center}
+.kl:first-child{border-top:0}
+.kl.kh2{background:var(--navy);color:#fff;font-weight:800;font-size:13px}
+.kl.me{background:#FFF6D6}
+.kl .kf{font:800 16px var(--f-num)}
+.kl small{color:var(--muted);font-size:12px}
+.kl .kin-o{color:var(--done);font-weight:700;font-size:13px}
+.kl .kno-o{color:var(--muted)}
+.kl .kred{color:var(--issue);font-weight:700}

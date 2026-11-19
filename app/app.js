@@ -4,8 +4,9 @@ import * as S from './store.js';
 import { setupMyWork } from './mywork.js';
 import { makeLeaveApi } from './leave_my.js';
 import { setupVoc } from './voc.js';
+import * as K from './keys.js';   // 🔑 플로어키 서명 (2026-11-19)
 
-const APP_VER = '2026.11.19-2';
+const APP_VER = '2026.11.19-3';
 // 관리자 = 보안 규칙 isAdmin 과 같은 목록 (UID 는 공개돼도 되는 값)
 const ADMINS = [
   { uid: 'iw2orXgIgPgTbLUQa0b41XJ9Dvd2', label: '소장', email: 'unieshaeundae+admin@gmail.com' },
@@ -45,6 +46,8 @@ let myPlan = null, plans = {}, chgDocs = [], recDocs = [], ackDocs = [], notices
 let roomInfo = {}, infoAsked = {}, pastAcks = {}, dirtyDoc = null, acksReady = false, errDocs = [], cmp = null, upDoc = null;
 let data = null, recs = {}, pend = {}, dlg = null, busy = false, viewMaid = null;
 let subs = [], meSubs = [], newVer = '';
+// 🔑 플로어키 (2026-11-19): meta/keys = 시작 날짜 · 끄기 스위치 · 안내 문구, keyDocs = 오늘 키 줄 (같은 날 모든 메이드 것 — 종이 대장처럼 서로 보임)
+let keyCfg = null, keyDocs = [], keyChk = [];   // keyChk = 하우스키퍼 대조 줄 (전체 키 현황의 '사무실에 있음')
 // 2인 1조 (부부 메이드): meta/teams.mate = {이름: 짝 이름}. 보고서·실적은 각자 이름 그대로, 휴대폰 화면만 한 조로 합침
 let teams = {}, teamPairs = [], teamsLoaded = false, matePlan = null, mateRecDocs = [], mateChgDocs = [];
 const TEAM_DEFAULT = [['최태자', '성락욱'], ['김태성', '조유경']];
@@ -117,6 +120,7 @@ function start() {
   }, e => console.warn('날짜 읽기 실패', e)));
   subs.push(S.listenQuery('notices', [], docs => { notices = docs.map(x => x.data); update(); }, e => console.warn('공지 읽기 실패', e)));
   subs.push(S.listenDoc('meta/dirty', d => { dirtyDoc = d; update(); }, () => {}));
+  subs.push(S.listenDoc('meta/keys', d => { keyCfg = d; update(); }, () => {}));
   subs.push(S.listenDoc('meta/teams', d => {
     const old = mateOf(me);
     teams = (d && d.mate) || {}; teamPairs = ((d && d.pairs) || []).map(x => String(x).split(',')); teamsLoaded = true;
@@ -148,7 +152,7 @@ function start() {
 // 메이드 본인 것만 (규칙상 반드시 이름 조건을 붙여야 읽힘)
 function listenMine() {
   meSubs.forEach(f => { try { f(); } catch (e) {} }); meSubs = [];
-  myPlan = null; chgDocs = []; recDocs = []; ackDocs = []; roomInfo = {}; infoAsked = {}; acksReady = false;
+  myPlan = null; chgDocs = []; recDocs = []; ackDocs = []; roomInfo = {}; infoAsked = {}; acksReady = false; keyDocs = []; keyChk = [];
   matePlan = null; mateRecDocs = []; mateChgDocs = [];
   if (!me) return;
   const D = 'days/' + today, nm = me;
@@ -163,6 +167,9 @@ function listenMine() {
     meSubs.push(S.listenQuery(D + '/recs', [['maid', '==', mt]], docs => { mateRecDocs = docs; update(); }, lost));
     meSubs.push(S.listenQuery(D + '/changes', [['parties', 'array-contains', mt]], docs => { mateChgDocs = docs; update(); }, lost));
   }
+  // 🔑 오늘 키 줄 (시작 날짜 전엔 줄이 없어 읽기 1건). 규칙 v17 전이면 거절 → 조용히 무시 (키 띠도 안 나옴)
+  meSubs.push(S.listenQuery(D + '/keys', [], docs => { keyDocs = docs; update(); }, e => console.warn('키 기록 읽기 실패', e)));
+  meSubs.push(S.listenQuery(D + '/keychk', [], docs => { keyChk = docs; if (dlg && dlg.kind === 'keylist') drawDlg(); }, () => {}));
   scanPastAcks(nm);
 }
 
@@ -462,7 +469,7 @@ function renderMaid(m, asAdmin) {
   if (!asAdmin) cheer(m, d, t, rem, bump, myPend);
   const dueLeft = m.rooms.filter(x => x.due && !recOf(recWho(m, x), x.room)).sort((a, b) => (a.due < b.due ? -1 : 1));
   const dirtyLeft = m.rooms.filter(x => isDirty(x.room) && !recOf(recWho(m, x), x.room));
-  let html = asAdmin ? '' : bands() + instHtml() + ventHtml() + swapBanner(m);
+  let html = asAdmin ? '' : bands() + instHtml() + ventHtml() + swapBanner(m) + keyBand(m);
   html += asAdmin ? '<div class="amode"><button class="ghost back" data-back="1">← 전체 현황</button><span>' + (m.team && m.team.length > 1 ? esc(m.team.join('·')) + ' 조 화면 (조 휴대폰과 같음 · 객실을 누르면 배정받은 분 이름으로 대신 처리)' : esc(m.name) + ' 님 화면' + (m.mateOff ? ' · 2인 1조 (짝 ' + esc(m.mateOff) + ' 님 오늘 배정 없음)' : '') + ' (객실을 누르면 대신 처리)') + '</span></div>' : '';
   const tile = (cls, n, lbl, jump) => (jump ? '<button class="stat ' + cls + '" data-jump="' + esc(jump) + '">' : '<div class="stat ' + cls + '">') + '<b>' + n + '</b><span>' + lbl + '</span>' + (jump ? '</button>' : '</div>');
   const isTeam = !!(m.team && m.team.length > 1), teamName = isTeam ? m.team.join(' · ') : m.name;
@@ -474,6 +481,7 @@ function renderMaid(m, asAdmin) {
     tile('dirty' + (dirtyLeft.length ? '' : ' zero'), dirtyLeft.length, '더티 끝남', dirtyLeft.length ? dirtyLeft[0].room : '') + '</div>' +
     '<div class="meter"><i style="width:' + (t ? d / t * 100 : 0) + '%"></i></div>' +
     (rem === 0 && t > 0 && myPend ? '<div class="saving">마지막 기록을 저장하는 중이에요…</div>' : '') +
+    (allDone && !asAdmin && keyOn() ? '<div class="keyret">' + retLines().map(l => '<p>' + esc(l) + '</p>').join('') + '</div>' : '') +
     (dueLeft.length ? '<div class="alert">' + IC.clock + '<span>시간 정해진 객실 ' + dueLeft.length + '실 남음 · ' + dueLeft.map(x => '<button class="jump" data-jump="' + esc(x.room) + '">' + esc(x.room) + ' (' + hmK(x.due) + ')</button>').join(' ') + '</span></div>' : '') +
     (dirtyLeft.length ? '<div class="dirtyline">' + IC.bed + '<span>더티 끝난 방 ' + dirtyLeft.length + '실 · ' + dirtyLeft.map(x => '<button class="jump" data-jump="' + esc(x.room) + '">' + esc(x.room) + '</button>').join(' ') + '</span></div>' : '') +
     '</section>';
@@ -495,7 +503,7 @@ function cheer(m, d, t, rem, bump, myPend) {
   if (rem !== 0) delete finArmed[k];
   if (finArmed[k] && !myPend) {
     delete finArmed[k];
-    if (!shown['fin' + k] && lsGet('rm_fin_' + k) !== '1') { shown['fin' + k] = 1; lsSet('rm_fin_' + k, '1'); confetti(); finCard(m, t); }
+    if (!shown['fin' + k] && lsGet('rm_fin_' + k) !== '1') { shown['fin' + k] = 1; lsSet('rm_fin_' + k, '1'); confetti(); finCard(m, t); if (keyOn() && !dlg) { dlg = { kind: 'keyret' }; drawDlg(); } }
     return;
   }
   if (bump && rem > 0 && t >= 4 && d * 2 >= t && !shown['half' + k] && lsGet('rm_half_' + k) !== '1') { shown['half' + k] = 1; lsSet('rm_half_' + k, '1'); toast('절반 왔어요! 힘내세요'); setTimeout(() => play('half'), 350); }
@@ -1027,6 +1035,7 @@ function drawDlg() {
         '<p class="hint">바꾸면 두 분 화면이 바로 바뀌고, ' + esc(pv.owner) + ' 님 화면에도 알림이 떠요. 시간·단체 표시는 객실을 따라가요.</p>' + errP() + btns('취소', '교환하기', true); }
   } else if (k === 'upload') body = upBody();
   else if (k === 'verify') body = vfBody();
+  else if (/^key/.test(k)) { body = keyDlgBody(); if (!body) { dlg = null; el.innerHTML = ''; return; } }
   else if (k === 'proxyask') body = '<h3>' + esc(dlg.maid) + ' 님 대신 처리할까요?</h3><p>' + esc(dlg.room) + '호 · 기록에 "관리자 대신"이 표시돼요.</p>' + btns('취소', '대신 처리', true);
   el.innerHTML = '<div class="scrim"' + (k === 'notice' && dlg.must ? '' : ' data-x="1"') + '><div class="' + cls + '">' + body + '</div></div>';
 }
@@ -1040,6 +1049,7 @@ document.addEventListener('input', e => {
   if (!dlg) return;
   const id = e.target.id, digits = v => v.replace(/[^0-9]/g, '').slice(0, 4);
   if (id === 'memo') dlg.memo = e.target.value;
+  if (id === 'keyetc') dlg.etc = e.target.value;
   if (id === 'apw') { dlg.pw = e.target.value; const g = document.querySelector('.panel [data-do]'); if (g && !busy) g.disabled = !dlg.pw; }
   if (id === 'roomno' || id === 'rmtyped' || id === 'swapno') {
     const v = digits(e.target.value); if (v !== e.target.value) e.target.value = v; dlg.err = '';
@@ -1091,11 +1101,16 @@ document.addEventListener('click', e => {
   if (at('[data-nlist]')) { dlg = { kind: 'nlist' }; drawDlg(); return; }
   if (at('[data-back]')) { viewMaid = null; render(); window.scrollTo(0, 0); return; }
   const vw = at('[data-view]'); if (vw) { viewMaid = vw.getAttribute('data-view'); render(); window.scrollTo(0, 0); return; }
+  if (keyClick(at)) return;
   const rm = at('[data-room]');
   if (rm) {
     const room = rm.getAttribute('data-room');
     if (isAdm && viewMaid) { const ow = ownerOf(room); dlg = recOf(ow, room) ? { kind: 'room', maid: ow, room, proxy: true } : { kind: 'proxyask', maid: ow, room }; drawDlg(); return; }
-    if (!isAdm && me) { dlg = { kind: 'room', maid: ownerOf(room), room }; drawDlg(); }
+    if (!isAdm && me) {
+      const f = K.floorOf(room);   // 🔑 이 층 키를 아직 안 알렸으면 먼저 묻고, 답하면 바로 객실 창으로
+      if (keyOn() && !recOf(ownerOf(room), room) && !keyAns(f)) { dlg = { kind: 'keyneed', floor: f, room }; drawDlg(); return; }
+      dlg = { kind: 'room', maid: ownerOf(room), room }; drawDlg();
+    }
   }
 });
 function onSheet(t, at) {
@@ -1118,6 +1133,7 @@ function onSheet(t, at) {
     if (act === 'rm') { dlg = { kind: 'rmroom', maid: who, room, proxy: px, typed: '' }; drawDlg(); const f = $('#rmtyped'); if (f) f.focus(); return; }
     if (act === 'swap') { dlg = { kind: 'swap', maid: who, room, proxy: px, no: '' }; drawDlg(); const f = $('#swapno'); if (f) f.focus(); return; }
   }
+  if (dlg && /^key/.test(dlg.kind) && keyClick(at)) return;
   if (dlg && dlg.kind === 'notice' && act === 'ack') { const n = dlg.n; ack(n); closeDlg(); render(); return; }
   const go = at('[data-do]'); if (!go || go.disabled || !dlg) return;
   const d0 = dlg;
@@ -1174,6 +1190,129 @@ function onSheet(t, at) {
     return;
   }
   if (d0.kind === 'proxyask') { dlg = { kind: 'room', maid: d0.maid, room: d0.room, proxy: true }; drawDlg(); }
+}
+
+// =====================================================================
+// 🔑 플로어키 서명 (2026-11-19) — 종이 「플로어 키 불출 대장」 대신
+// 배정 층마다 한 줄 [A키][B키][안 가져가요]. 그 층 키를 알려야 그 층 객실 완료가 됨 (서명 누락 막기)
+// 잘못 누르면 [바꾸기] (처음 · 바꾼 기록 둘 다 남음, 지우기 없음). 같은 층 같은 키를 다른 분이 이미 눌렀으면 경고
+// 반납은 마지막 객실 완료 때 안내 문구만 (누를 것 없음) — 실제 반납 확인은 하우스키퍼 오후 대조(허브)
+// 시작 날짜(meta/keys.from) 전이거나 꺼짐(on:false)이면 아무것도 안 보임
+// =====================================================================
+function keyOn() { return !isAdm && !!me && K.enabled(keyCfg, today); }
+function keyLat() { return K.latest(keyDocs); }
+function keyMine() { const mt = mateOf(me); return mt ? [me, mt] : [me]; }
+function keyAns(f, lat) { lat = lat || keyLat(); const mt = mateOf(me); return lat[me + '|' + f] || (mt && lat[mt + '|' + f]) || null; }
+function keyFloors() { const m = data && data.maids[0]; return m ? K.floorsOfRooms(m.rooms) : []; }
+function keyMiss() { const lat = keyLat(); return keyFloors().filter(f => !keyAns(f, lat)); }
+function keyOthers(f, lat) {
+  const mine = keyMine();
+  return ['A', 'B'].map(k => { const n = K.takenBy(lat, f, k, mine); return n.length ? k + '키 ' + n.join('·') + ' 님' : ''; }).filter(x => x).join(' / ');
+}
+function keyTime(a) { return hm(a.clientAt || a.at); }
+function keyBand(m) {
+  if (!keyOn()) return '';
+  const fl = K.floorsOfRooms(m.rooms); if (!fl.length) return '';
+  const lat = keyLat(), miss = fl.filter(f => !keyAns(f, lat));
+  const rows = fl.map(f => {
+    const a = keyAns(f, lat), oth = keyOthers(f, lat);
+    if (a) return '<div class="krow ok"><b class="kf">' + f + '층</b><span class="kv">' + esc(K.KEY_LABEL[a.key] || a.key) + (a.key === '없음' && a.reason ? ' <small>' + esc(a.reason) + '</small>' : '') +
+      '<small>' + keyTime(a) + (a.maid !== me ? ' · ' + esc(a.maid) + ' 님' : '') + (a.by === '관리자' ? ' · 관리자가 고침' : '') + '</small></span><button class="kchg" data-keychg="' + f + '">바꾸기</button></div>';
+    return '<div class="krow"><b class="kf">' + f + '층</b><span class="kbtns"><button data-key="' + f + ':A">A키</button><button data-key="' + f + ':B">B키</button><button class="kno" data-keynone="' + f + '">안 가져가요</button></span>' +
+      (oth ? '<small class="koth">이미 가져감 · ' + esc(oth) + '</small>' : '') + '</div>';
+  }).join('');
+  const head = miss.length
+    ? '<div class="kh"><b>🔑 키 가져가실 때 눌러 주세요</b><span>' + miss.map(f => f + '층').join(' · ') + ' 키를 알려 주셔야 그 층 객실을 완료할 수 있어요.</span></div>'
+    : '<div class="kh"><b>🔑 오늘 키 기록 완료</b><span>퇴근 전에 키를 사무실에 반납해 주세요. 잘못 눌렀으면 [바꾸기]</span></div>';
+  const all = miss.length > 1 ? '<div class="kall"><button data-keyall="A">남은 ' + miss.length + '개 층 모두 A키</button><button data-keyall="B">모두 B키</button></div>' : '';
+  return '<section class="keyband' + (miss.length ? ' need' : ' done') + '">' + head + rows + all + '<button class="kview" data-keylist="1">🔑 전체 키 현황 · 누가 어느 층 키를 가졌나</button></section>';
+}
+// 반납 안내 (마지막 객실 완료 때) — 받은 키만 적음, 키가 없으면 유실물 줄만. 문구는 허브에서 바꿀 수 있음 ({키} 자리에 '12층 A키')
+const RET_KEY = '🔑 {키} 챙겨서 사무실에 반납해 주세요.', RET_LOST = '🧳 고객 유실물이 있으면 사무실에 같이 반납해 주세요.';
+function retLines() {
+  const lat = keyLat(), mine = keyMine(), got = [];
+  Object.keys(lat).forEach(k => { const d = lat[k]; if (mine.indexOf(d.maid) >= 0 && d.key !== '없음') got.push(d); });
+  got.sort((a, b) => a.floor - b.floor);
+  const c = keyCfg || {}, out = [];
+  if (got.length) out.push(String(c.retText || RET_KEY).replace('{키}', got.map(d => d.floor + '층 ' + K.KEY_LABEL[d.key]).join(', ')));
+  const lost = c.lostText == null ? RET_LOST : String(c.lostText);
+  if (lost.trim()) out.push(lost);
+  return out;
+}
+function keyWrite(f, key, reason) {
+  const r = S.add('days/' + today + '/keys', { floor: Number(f), maid: me, key, reason: String(reason || '').slice(0, 40), by: '본인', who: '', at: S.SERVER_TIME, clientAt: new Date(), uid: user.uid });
+  r.done.catch(e => { report('키', f + '층 ' + (e && e.code || '') + ' ' + (e && e.message || e)); say(f + '층 키 기록이 저장되지 않았어요. ' + errText(e)); });
+}
+// 고른 키 저장 (여러 층 한 번에도). 다른 분이 같은 키를 이미 눌렀으면 먼저 확인 창
+function keyPick(floors, key, reason, room, force) {
+  const lat = keyLat(), mine = keyMine();
+  const dups = key === '없음' ? [] : floors.map(f => ({ f, k: key, n: K.takenBy(lat, f, key, mine) })).filter(x => x.n.length);
+  if (dups.length && !force) { dlg = { kind: 'keydup', floors, key, reason, room, dups }; drawDlg(); return; }
+  floors.forEach(f => keyWrite(f, key, reason));
+  vibe(25); play('stamp');
+  say(floors.map(f => f + '층').join(' · ') + ' ' + K.KEY_LABEL[key] + (reason ? ' (' + reason + ')' : '') + ' 기록했어요.');
+  if (room && !keyAns(K.floorOf(room)) && floors.indexOf(K.floorOf(room)) < 0) { dlg = { kind: 'keyneed', floor: K.floorOf(room), room }; drawDlg(); return; }
+  dlg = room ? { kind: 'room', maid: ownerOf(room), room } : null; drawDlg(); update();
+}
+function keyReason(d) { return d.reason === '기타' ? ('기타' + (String(d.etc || '').trim() ? ': ' + String(d.etc).trim() : '')).slice(0, 40) : d.reason; }
+function keyClick(at) {
+  if (!keyOn()) return false;
+  const room = dlg && dlg.room;
+  const kb = at('[data-key]'); if (kb) { const [f, k] = kb.getAttribute('data-key').split(':'); keyPick([Number(f)], k, '', room); return true; }
+  const ka = at('[data-keyall]'); if (ka) { keyPick(keyMiss(), ka.getAttribute('data-keyall'), '', null); return true; }
+  const kn = at('[data-keynone]'); if (kn) { dlg = { kind: 'keynone', floors: [Number(kn.getAttribute('data-keynone'))], reason: '', etc: '', room }; drawDlg(); return true; }
+  const kc = at('[data-keychg]'); if (kc) { const f = Number(kc.getAttribute('data-keychg')), a = keyAns(f); if (!a) return true; dlg = { kind: 'keychg', floor: f, cur: a, pick: '', reason: '', etc: '' }; drawDlg(); return true; }
+  const kr = at('[data-kreason]'); if (kr && dlg) { const e = $('#keyetc'); if (e) dlg.etc = e.value; dlg.reason = kr.getAttribute('data-kreason'); dlg.err = ''; drawDlg(); if (dlg.reason === '기타') { const t = $('#keyetc'); if (t) t.focus(); } return true; }
+  const kp = at('[data-kpick]'); if (kp && dlg && dlg.kind === 'keychg') { dlg.pick = kp.getAttribute('data-kpick'); dlg.err = ''; drawDlg(); return true; }
+  if (at('[data-kret]')) { dlg = null; drawDlg(); return true; }
+  if (at('[data-keylist]')) { dlg = { kind: 'keylist' }; drawDlg(); return true; }
+  if (at('[data-kdo]') && dlg) {
+    const d = dlg, e = $('#keyetc'); if (e) d.etc = e.value;
+    if (d.kind === 'keynone') { if (!d.reason) { d.err = '이유를 하나 골라 주세요.'; drawDlg(); return true; } keyPick(d.floors, '없음', keyReason(d), d.room); return true; }
+    if (d.kind === 'keychg') {
+      if (!d.pick) { d.err = '바꿀 것을 골라 주세요.'; drawDlg(); return true; }
+      if (d.pick === '없음' && !d.reason) { d.err = '안 가져간 이유를 골라 주세요.'; drawDlg(); return true; }
+      keyPick([d.floor], d.pick, d.pick === '없음' ? keyReason(d) : '', null); return true;
+    }
+    if (d.kind === 'keydup') { keyPick(d.floors, d.key, d.reason, d.room, true); return true; }
+  }
+  return false;
+}
+function keyReasonHtml(d) {
+  return '<div class="kreasons">' + K.REASONS.map(r => '<button data-kreason="' + esc(r) + '" aria-pressed="' + (d.reason === r) + '">' + esc(r) + '</button>').join('') + '</div>' +
+    (d.reason === '기타' ? '<input id="keyetc" class="kin" maxlength="30" placeholder="짧게 적어 주세요 (안 적어도 돼요)" value="' + esc(d.etc || '') + '">' : '');
+}
+function keyDlgBody() {
+  const d = dlg, k = d.kind, lat = keyLat();
+  const kbtn = '<button class="kok" data-kdo="1"' + '>';
+  if (k === 'keyneed') {
+    if (keyAns(d.floor, lat)) return '';
+    const oth = keyOthers(d.floor, lat);
+    return '<h3>🔑 ' + d.floor + '층 키를 먼저 알려 주세요</h3><p>' + esc(d.room) + '호를 완료하기 전에, 오늘 ' + d.floor + '층 키를 가져가셨는지 눌러 주세요.</p>' +
+      (oth ? '<p class="koth">이미 가져감 · ' + esc(oth) + '</p>' : '') +
+      '<div class="kbig"><button data-key="' + d.floor + ':A">A키 가져감</button><button data-key="' + d.floor + ':B">B키 가져감</button><button class="kno" data-keynone="' + d.floor + '">안 가져가요</button></div>' +
+      '<div class="acts"><button data-x="1">닫기</button></div>';
+  }
+  if (k === 'keynone') return '<h3>' + d.floors.map(f => f + '층').join(' · ') + ' 키를 안 가져가셨나요?</h3><p>이유를 골라 주세요.</p>' + keyReasonHtml(d) +
+    (d.reason === '다른 분 키' ? '<div class="kwho">' + d.floors.map(f => { const o = keyOthers(f, lat); return '<b>' + f + '층 키</b> ' + (o ? esc(o) + '이 가지고 있어요' : '아직 가져간 분이 없어요 (사무실에 있을 수 있어요)'); }).join('<br>') + '</div>' : '') + errP() +
+    '<div class="acts"><button data-x="1">취소</button>' + kbtn.replace('kok', 'go') + '안 가져감으로 저장</button></div>';
+  if (k === 'keychg') {
+    const opts = [['A', 'A키'], ['B', 'B키'], ['AB', 'A·B 둘 다'], ['없음', '안 가져가요']];
+    return '<h3>' + d.floor + '층 키 바꾸기</h3><p>지금 기록: <b style="color:var(--ink)">' + esc(K.KEY_LABEL[d.cur.key] || d.cur.key) + '</b>' + (d.cur.reason ? ' (' + esc(d.cur.reason) + ')' : '') + ' · ' + keyTime(d.cur) +
+      '<br>바꾸면 처음 기록과 바꾼 기록이 둘 다 남아요.</p><div class="kbig k4">' + opts.map(o => '<button data-kpick="' + o[0] + '" aria-pressed="' + (d.pick === o[0]) + '"' + (d.cur.key === o[0] ? ' disabled' : '') + '>' + o[1] + '</button>').join('') + '</div>' +
+      (d.pick === '없음' ? keyReasonHtml(d) : '') + errP() + '<div class="acts"><button data-x="1">취소</button>' + kbtn.replace('kok', 'go') + '이렇게 바꾸기</button></div>';
+  }
+  if (k === 'keydup') return '<h3>잠깐요, 한 번 더 확인해 주세요</h3><div class="warnbox">' + d.dups.map(x => '<b>' + x.f + '층 ' + esc(K.KEY_LABEL[d.key]) + '</b>는 <b>' + esc(x.n.join(', ')) + '</b> 님이 이미 가져갔다고 했어요.').join('<br>') + '</div>' +
+    '<p>손에 든 키 꼬리표를 다시 봐 주세요. 맞으면 그대로 저장해도 돼요 (관리자가 확인해요).</p><div class="acts"><button data-x="1">다시 고르기</button>' + kbtn.replace('kok', 'danger') + '그래도 저장</button></div>';
+  if (k === 'keylist') {
+    const L = K.ledger(lat, keyChk), mf = keyFloors();
+    const cell = x => x.st === 'in' ? '<span class="kin-o">사무실에 있음</span>' : x.takers.length ? x.takers.map(t => '<b>' + esc(t.maid) + '</b> <small>' + keyTime(t) + '</small>').join('<br>') + (x.st === 'late' || x.st === 'nosign' ? ' <small class="kred">대조 때 없음</small>' : '') : '<span class="kno-o">—</span>';
+    return '<h3>🔑 전체 키 현황</h3><p>지금 누가 어느 층 키를 가졌는지예요. 키를 잠시 빌릴 때 보세요. (내 층은 노란색)</p><div class="klist"><div class="kl kh2"><span>층</span><span>A키</span><span>B키</span></div>' +
+      L.map(r => '<div class="kl' + (mf.indexOf(r.floor) >= 0 ? ' me' : '') + '"><span class="kf">' + r.floor + '층</span><span>' + cell(r.A) + '</span><span>' + cell(r.B) + '</span></div>').join('') +
+      '</div><div class="acts"><button data-x="1">닫기</button></div>';
+  }
+  if (k === 'keyret') { const L = retLines(); return '<h3>오늘 정비 끝! 퇴근 전에 확인해 주세요</h3><div class="kret">' + L.map(l => '<p>' + esc(l) + '</p>').join('') + '</div><button class="big" data-kret="1">확인</button>'; }
+  return '';
 }
 
 // =====================================================================
