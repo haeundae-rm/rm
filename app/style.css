@@ -580,3 +580,5 @@ html.inhub main{padding-top:12px}
 .kl .kin-o{color:var(--done);font-weight:700;font-size:13px}
 .kl .kno-o{color:var(--muted)}
 .kl .kred{color:var(--issue);font-weight:700}
+.kchip.ret{background:var(--surface);color:var(--navy);border:2px solid var(--navy)}
+.kchip.ret.on{background:var(--done);border-color:var(--done);color:#fff}

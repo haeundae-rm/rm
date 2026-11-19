@@ -7,6 +7,8 @@
 //                        쌓기만 함 (고치기 · 지우기 없음). 같은 사람 · 같은 층은 '마지막 줄'이 지금 값 → 바꾼 기록이 그대로 남음
 //   days/{날짜}/keychk/{id} { floor, key: 'A'|'B', st: 'in'|'out'|'', by, at, uid }
 //                        하우스키퍼 오후 대조 (실물 있음/없음). 이것도 쌓기만, 층 · 키마다 마지막 줄이 지금 값
+//   days/{날짜}/keyret/{id} { floor, maid, on: true|false, at, clientAt, uid }   (v18) 메이드 '반납했어요' 표시 (선택). 쌓기만, 사람 · 층마다 마지막 줄
+//                        → 대조 전엔 '메이드 반납 표시'로 보이고, 실제 반납 확인은 여전히 하우스키퍼 대조
 export const FLOORS = Array.from({ length: 28 }, (_, i) => i + 4);   // 4층 ~ 31층 (종이 대장과 같음)
 export const REASONS = ['짝이 열어 줌', '다른 분 키', '기타'];
 export const KEY_LABEL = { A: 'A키', B: 'B키', AB: 'A·B키', '없음': '안 가져감' };
@@ -61,15 +63,26 @@ export function latestChk(docs) {
 //   'nosign'  서명 없이 없음 (아무도 가져갔다고 안 했는데 대조 때 없음)
 //   'out'     가져감 · 대조 전
 //   ''        아무도 안 가져감 · 대조 전 (또는 있음)
+//   'ret'     가져감 · 대조 전이지만 가져간 분이 모두 '반납했어요'를 누름
 export function cellState(takers, chk) {
   const st = chk && chk.st;
   if (st === 'in') return 'in';
   if (st === 'out') return takers.length ? 'late' : 'nosign';
-  return takers.length ? 'out' : '';
+  return takers.length ? (takers.every(d => d.ret) ? 'ret' : 'out') : '';
+}
+// 메이드 반납 표시: 사람 · 층마다 마지막 줄 { 'name|floor': doc } (on:false = 취소)
+export function latestRet(docs) {
+  const out = {};
+  (docs || []).map(x => Object.assign({ id: x.id }, x.data || x)).filter(d => d.maid && d.floor)
+    .sort((a, b) => tOf(a) - tOf(b) || (a.id < b.id ? -1 : 1)).forEach(d => { out[d.maid + '|' + d.floor] = d; });
+  Object.keys(out).forEach(k => { if (out[k].on === false) delete out[k]; });
+  return out;
 }
 // 대장 전체: 4~31층 줄 (+ 그 밖 층에 기록이 있으면 그 층도)
-export function ledger(lat, chkDocs) {
-  const F = byFloor(lat), C = latestChk(chkDocs);
+export function ledger(lat, chkDocs, retDocs) {
+  const R = latestRet(retDocs);
+  const lat2 = {}; Object.keys(lat).forEach(k => { lat2[k] = R[k] ? Object.assign({}, lat[k], { ret: R[k].clientAt || R[k].at || 1 }) : lat[k]; });
+  const F = byFloor(lat2), C = latestChk(chkDocs);
   const fl = FLOORS.slice(); Object.keys(F).concat(Object.keys(C)).map(Number).forEach(f => { if (fl.indexOf(f) < 0) fl.push(f); });
   return fl.sort((a, b) => a - b).map(f => {
     const x = F[f] || { A: [], B: [], none: [] }, c = C[f] || {};
@@ -102,7 +115,7 @@ export function unanswered(mf, lat, mate) {
 }
 // 허브 첫 화면 · 키 대장 요약
 export function summary(o) {
-  const lat = latest(o.keys), L = ledger(lat, o.chk);
+  const lat = latest(o.keys), L = ledger(lat, o.chk, o.ret);
   const un = o.mf ? unanswered(o.mf, lat, o.mate) : [];
   const cells = []; L.forEach(r => ['A', 'B'].forEach(k => cells.push(Object.assign({ floor: r.floor, key: k }, r[k]))));
   const late = cells.filter(c => c.st === 'late'), nosign = cells.filter(c => c.st === 'nosign');

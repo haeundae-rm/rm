@@ -6,7 +6,7 @@ import { makeLeaveApi } from './leave_my.js';
 import { setupVoc } from './voc.js';
 import * as K from './keys.js';   // 🔑 플로어키 서명 (2026-11-19)
 
-const APP_VER = '2026.11.19-5';
+const APP_VER = '2026.11.19-6';
 // 관리자 = 보안 규칙 isAdmin 과 같은 목록 (UID 는 공개돼도 되는 값)
 const ADMINS = [
   { uid: 'iw2orXgIgPgTbLUQa0b41XJ9Dvd2', label: '소장', email: 'unieshaeundae+admin@gmail.com' },
@@ -47,7 +47,7 @@ let roomInfo = {}, infoAsked = {}, pastAcks = {}, dirtyDoc = null, acksReady = f
 let data = null, recs = {}, pend = {}, dlg = null, busy = false, viewMaid = null;
 let subs = [], meSubs = [], newVer = '';
 // 🔑 플로어키 (2026-11-19): meta/keys = 시작 날짜 · 끄기 스위치 · 안내 문구, keyDocs = 오늘 키 줄 (같은 날 모든 메이드 것 — 종이 대장처럼 서로 보임)
-let keyCfg = null, keyDocs = [], keyChk = [];   // keyChk = 하우스키퍼 대조 줄 (전체 키 현황의 '사무실에 있음')
+let keyCfg = null, keyDocs = [], keyChk = [], keyRet = [];   // keyRet = 메이드 '반납했어요' 표시 (v18, 선택)   // keyChk = 하우스키퍼 대조 줄 (전체 키 현황의 '사무실에 있음')
 // 2인 1조 (부부 메이드): meta/teams.mate = {이름: 짝 이름}. 보고서·실적은 각자 이름 그대로, 휴대폰 화면만 한 조로 합침
 let teams = {}, teamPairs = [], teamsLoaded = false, matePlan = null, mateRecDocs = [], mateChgDocs = [];
 const TEAM_DEFAULT = [['최태자', '성락욱'], ['김태성', '조유경']];
@@ -152,7 +152,7 @@ function start() {
 // 메이드 본인 것만 (규칙상 반드시 이름 조건을 붙여야 읽힘)
 function listenMine() {
   meSubs.forEach(f => { try { f(); } catch (e) {} }); meSubs = [];
-  myPlan = null; chgDocs = []; recDocs = []; ackDocs = []; roomInfo = {}; infoAsked = {}; acksReady = false; keyDocs = []; keyChk = [];
+  myPlan = null; chgDocs = []; recDocs = []; ackDocs = []; roomInfo = {}; infoAsked = {}; acksReady = false; keyDocs = []; keyChk = []; keyRet = [];
   matePlan = null; mateRecDocs = []; mateChgDocs = [];
   if (!me) return;
   const D = 'days/' + today, nm = me;
@@ -170,6 +170,7 @@ function listenMine() {
   // 🔑 오늘 키 줄 (시작 날짜 전엔 줄이 없어 읽기 1건). 규칙 v17 전이면 거절 → 조용히 무시 (키 띠도 안 나옴)
   meSubs.push(S.listenQuery(D + '/keys', [], docs => { keyDocs = docs; update(); }, e => console.warn('키 기록 읽기 실패', e)));
   meSubs.push(S.listenQuery(D + '/keychk', [], docs => { keyChk = docs; if (dlg && dlg.kind === 'keylist') drawDlg(); }, () => {}));
+  meSubs.push(S.listenQuery(D + '/keyret', [['maid', 'in', keyMine()]], docs => { keyRet = docs; update(); }, () => {}));
   scanPastAcks(nm);
 }
 
@@ -469,7 +470,7 @@ function renderMaid(m, asAdmin) {
   if (!asAdmin) cheer(m, d, t, rem, bump, myPend);
   const dueLeft = m.rooms.filter(x => x.due && !recOf(recWho(m, x), x.room)).sort((a, b) => (a.due < b.due ? -1 : 1));
   const dirtyLeft = m.rooms.filter(x => isDirty(x.room) && !recOf(recWho(m, x), x.room));
-  let html = asAdmin ? '' : bands() + instHtml() + ventHtml() + swapBanner(m) + keyBand(m);
+  let html = asAdmin ? '' : bands() + instHtml() + ventHtml() + swapBanner(m) + keyBand(m, allDone);
   html += asAdmin ? '<div class="amode"><button class="ghost back" data-back="1">← 전체 현황</button><span>' + (m.team && m.team.length > 1 ? esc(m.team.join('·')) + ' 조 화면 (조 휴대폰과 같음 · 객실을 누르면 배정받은 분 이름으로 대신 처리)' : esc(m.name) + ' 님 화면' + (m.mateOff ? ' · 2인 1조 (짝 ' + esc(m.mateOff) + ' 님 오늘 배정 없음)' : '') + ' (객실을 누르면 대신 처리)') + '</span></div>' : '';
   const tile = (cls, n, lbl, jump) => (jump ? '<button class="stat ' + cls + '" data-jump="' + esc(jump) + '">' : '<div class="stat ' + cls + '">') + '<b>' + n + '</b><span>' + lbl + '</span>' + (jump ? '</button>' : '</div>');
   const isTeam = !!(m.team && m.team.length > 1), teamName = isTeam ? m.team.join(' · ') : m.name;
@@ -1210,12 +1211,16 @@ function keyOthers(f, lat) {
   return ['A', 'B'].map(k => { const n = K.takenBy(lat, f, k, mine); return n.length ? k + '키 ' + n.join('·') + ' 님' : ''; }).filter(x => x).join(' / ');
 }
 function keyTime(a) { return hm(a.clientAt || a.at); }
-function keyBand(m) {   // 레포트가 주인공 → 키는 작게: 다 알리면 한 줄, 안 알린 층만 버튼 줄
+function keyBand(m, allDone) {   // 레포트가 주인공 → 키는 작게: 다 알리면 한 줄, 안 알린 층만 버튼 줄
   if (!keyOn()) return '';
   const fl = K.floorsOfRooms(m.rooms); if (!fl.length) return '';
   const lat = keyLat(), miss = fl.filter(f => !keyAns(f, lat));
   const view = '<button class="kview" data-keylist="1">현황</button>';
+  const R = K.latestRet(keyRet);
   const chips = fl.filter(f => keyAns(f, lat)).map(f => { const a = keyAns(f, lat);
+    // 정비 끝나면 받은 키 칸이 [반납했어요] 버튼으로 (누르는 건 선택 · 다시 누르면 취소). 실제 반납 확인은 하우스키퍼 대조
+    if (allDone && a.key !== '없음') { const r = R[a.maid + '|' + f];
+      return '<button class="kchip ret' + (r ? ' on' : '') + '" data-keyret="' + f + '">' + f + '층 ' + esc(K.KEY_LABEL[a.key] || a.key) + (r ? ' ✔ 반납 ' + keyTime(r) : ' · 반납했어요') + '</button>'; }
     return '<button class="kchip' + (a.key === '없음' ? ' no' : '') + '" data-keychg="' + f + '" aria-label="' + f + '층 키 바꾸기">' + f + '층 ' + esc(K.KEY_LABEL[a.key] || a.key) + '</button>'; }).join('');
   if (!miss.length) return '<section class="keyband done"><span class="kic">🔑</span><span class="kchips">' + chips + '</span>' + view + '</section>';
   const rows = miss.map(f => { const oth = keyOthers(f, lat);
@@ -1226,10 +1231,13 @@ function keyBand(m) {   // 레포트가 주인공 → 키는 작게: 다 알리�
 }
 // 반납 안내 (마지막 객실 완료 때) — 받은 키만 적음, 키가 없으면 유실물 줄만. 문구는 허브에서 바꿀 수 있음 ({키} 자리에 '12층 A키')
 const RET_KEY = '🔑 {키} 챙겨서 사무실에 반납해 주세요.', RET_LOST = '🧳 고객 유실물이 있으면 사무실에 같이 반납해 주세요.';
-function retLines() {
+function keyGot() {   // 오늘 내가(짝 포함) 가져간 키 줄들 (층 순)
   const lat = keyLat(), mine = keyMine(), got = [];
   Object.keys(lat).forEach(k => { const d = lat[k]; if (mine.indexOf(d.maid) >= 0 && d.key !== '없음') got.push(d); });
-  got.sort((a, b) => a.floor - b.floor);
+  return got.sort((a, b) => a.floor - b.floor);
+}
+function retLines() {
+  const got = keyGot();
   const c = keyCfg || {}, out = [];
   if (got.length) out.push(String(c.retText || RET_KEY).replace('{키}', got.map(d => d.floor + '층 ' + K.KEY_LABEL[d.key]).join(', ')));
   const lost = c.lostText == null ? RET_LOST : String(c.lostText);
@@ -1261,6 +1269,13 @@ function keyClick(at) {
   const kr = at('[data-kreason]'); if (kr && dlg) { const e = $('#keyetc'); if (e) dlg.etc = e.value; dlg.reason = kr.getAttribute('data-kreason'); dlg.err = ''; drawDlg(); if (dlg.reason === '기타') { const t = $('#keyetc'); if (t) t.focus(); } return true; }
   const kp = at('[data-kpick]'); if (kp && dlg && dlg.kind === 'keychg') { dlg.pick = kp.getAttribute('data-kpick'); dlg.err = ''; drawDlg(); return true; }
   if (at('[data-kret]')) { dlg = null; drawDlg(); return true; }
+  const kt = at('[data-keyret]'); if (kt) {
+    const f = Number(kt.getAttribute('data-keyret')), a = keyAns(f); if (!a) return true;
+    const r = K.latestRet(keyRet)[a.maid + '|' + f];
+    const w = S.add('days/' + today + '/keyret', { floor: f, maid: a.maid, on: !r, at: S.SERVER_TIME, clientAt: new Date(), uid: user.uid });
+    w.done.catch(e => { report('키 반납', f + '층 ' + (e && e.code || '') + ' ' + (e && e.message || e)); say(f + '층 반납 표시가 저장되지 않았어요. ' + errText(e)); });
+    vibe(25); say(r ? f + '층 반납 표시를 취소했어요.' : f + '층 키 반납했어요. 수고하셨어요!'); return true;
+  }
   if (at('[data-keylist]')) { dlg = { kind: 'keylist' }; drawDlg(); return true; }
   if (at('[data-kdo]') && dlg) {
     const d = dlg, e = $('#keyetc'); if (e) d.etc = e.value;
@@ -1301,13 +1316,14 @@ function keyDlgBody() {
   if (k === 'keydup') return '<h3>잠깐요, 한 번 더 확인해 주세요</h3><div class="warnbox">' + d.dups.map(x => '<b>' + x.f + '층 ' + esc(K.KEY_LABEL[d.key]) + '</b>는 <b>' + esc(x.n.join(', ')) + '</b> 님이 이미 가져갔다고 했어요.').join('<br>') + '</div>' +
     '<p>손에 든 키 꼬리표를 다시 봐 주세요. 맞으면 그대로 저장해도 돼요 (관리자가 확인해요).</p><div class="acts"><button data-x="1">다시 고르기</button>' + kbtn.replace('kok', 'danger') + '그래도 저장</button></div>';
   if (k === 'keylist') {
-    const L = K.ledger(lat, keyChk), mf = keyFloors();
-    const cell = x => x.st === 'in' ? '<span class="kin-o">사무실에 있음</span>' : x.takers.length ? x.takers.map(t => '<b>' + esc(t.maid) + '</b> <small>' + keyTime(t) + '</small>').join('<br>') + (x.st === 'late' || x.st === 'nosign' ? ' <small class="kred">대조 때 없음</small>' : '') : '<span class="kno-o">—</span>';
+    const L = K.ledger(lat, keyChk, keyRet), mf = keyFloors();
+    const cell = x => x.st === 'in' || x.st === 'ret' ? '<span class="kin-o">사무실에 있음' + (x.st === 'ret' ? ' (반납 표시)' : '') + '</span>' : x.takers.length ? x.takers.map(t => '<b>' + esc(t.maid) + '</b> <small>' + keyTime(t) + '</small>').join('<br>') + (x.st === 'late' || x.st === 'nosign' ? ' <small class="kred">대조 때 없음</small>' : '') : '<span class="kno-o">—</span>';
     return '<h3>🔑 전체 키 현황</h3><p>지금 누가 어느 층 키를 가졌는지예요. 키를 잠시 빌릴 때 보세요. (내 층은 노란색)</p><div class="klist"><div class="kl kh2"><span>층</span><span>A키</span><span>B키</span></div>' +
       L.map(r => '<div class="kl' + (mf.indexOf(r.floor) >= 0 ? ' me' : '') + '"><span class="kf">' + r.floor + '층</span><span>' + cell(r.A) + '</span><span>' + cell(r.B) + '</span></div>').join('') +
       '</div><div class="acts"><button data-x="1">닫기</button></div>';
   }
-  if (k === 'keyret') { const L = retLines(); return '<h3>오늘 정비 끝! 퇴근 전에 확인해 주세요</h3><div class="kret">' + L.map(l => '<p>' + esc(l) + '</p>').join('') + '</div><button class="big" data-kret="1">확인</button>'; }
+  if (k === 'keyret') { const L = retLines(), got = keyGot().length;
+    return '<h3>오늘 정비 끝! 퇴근 전에 확인해 주세요</h3><div class="kret">' + L.map(l => '<p>' + esc(l) + '</p>').join('') + '</div>' + (got ? '<p class="hint">반납하신 뒤 맨 위 키 칸의 <b>[반납했어요]</b>를 눌러 주시면 더 좋아요.</p>' : '') + '<button class="big" data-kret="1">확인</button>'; }
   return '';
 }
 
