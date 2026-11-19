@@ -6,7 +6,7 @@ import { makeLeaveApi } from './leave_my.js';
 import { setupVoc } from './voc.js';
 import * as K from './keys.js';   // 🔑 플로어키 서명 (2026-11-19)
 
-const APP_VER = '2026.11.19-4';
+const APP_VER = '2026.11.19-5';
 // 관리자 = 보안 규칙 isAdmin 과 같은 목록 (UID 는 공개돼도 되는 값)
 const ADMINS = [
   { uid: 'iw2orXgIgPgTbLUQa0b41XJ9Dvd2', label: '소장', email: 'unieshaeundae+admin@gmail.com' },
@@ -1210,21 +1210,19 @@ function keyOthers(f, lat) {
   return ['A', 'B'].map(k => { const n = K.takenBy(lat, f, k, mine); return n.length ? k + '키 ' + n.join('·') + ' 님' : ''; }).filter(x => x).join(' / ');
 }
 function keyTime(a) { return hm(a.clientAt || a.at); }
-function keyBand(m) {
+function keyBand(m) {   // 레포트가 주인공 → 키는 작게: 다 알리면 한 줄, 안 알린 층만 버튼 줄
   if (!keyOn()) return '';
   const fl = K.floorsOfRooms(m.rooms); if (!fl.length) return '';
   const lat = keyLat(), miss = fl.filter(f => !keyAns(f, lat));
-  const rows = fl.map(f => {
-    const a = keyAns(f, lat), oth = keyOthers(f, lat);
-    if (a) return '<div class="krow ok"><b class="kf">' + f + '층</b><span class="kv">' + esc(K.KEY_LABEL[a.key] || a.key) + (a.key === '없음' && a.reason ? ' <small>' + esc(a.reason) + '</small>' : '') +
-      '<small>' + keyTime(a) + (a.maid !== me ? ' · ' + esc(a.maid) + ' 님' : '') + (a.by === '관리자' ? ' · 관리자가 고침' : '') + '</small></span><button class="kchg" data-keychg="' + f + '">바꾸기</button></div>';
+  const view = '<button class="kview" data-keylist="1">현황</button>';
+  const chips = fl.filter(f => keyAns(f, lat)).map(f => { const a = keyAns(f, lat);
+    return '<button class="kchip' + (a.key === '없음' ? ' no' : '') + '" data-keychg="' + f + '" aria-label="' + f + '층 키 바꾸기">' + f + '층 ' + esc(K.KEY_LABEL[a.key] || a.key) + '</button>'; }).join('');
+  if (!miss.length) return '<section class="keyband done"><span class="kic">🔑</span><span class="kchips">' + chips + '</span>' + view + '</section>';
+  const rows = miss.map(f => { const oth = keyOthers(f, lat);
     return '<div class="krow"><b class="kf">' + f + '층</b><span class="kbtns"><button data-key="' + f + ':A">A키</button><button data-key="' + f + ':B">B키</button><button class="kno" data-keynone="' + f + '">안 가져가요</button></span>' +
-      (oth ? '<small class="koth">이미 가져감 · ' + esc(oth) + '</small>' : '') + '</div>';
-  }).join('');
-  const head = miss.length
-    ? '<div class="kh"><b>🔑 키 가져가실 때 눌러 주세요</b><span>' + miss.map(f => f + '층').join(' · ') + ' 키를 알려 주셔야 그 층 객실을 완료할 수 있어요.</span></div>'
-    : '<div class="kh"><b>🔑 오늘 키 기록 완료</b><span>퇴근 전에 키를 사무실에 반납해 주세요. 잘못 눌렀으면 [바꾸기]</span></div>';
-  return '<section class="keyband' + (miss.length ? ' need' : ' done') + '">' + head + rows + '<button class="kview" data-keylist="1">🔑 전체 키 현황 · 누가 어느 층 키를 가졌나</button></section>';
+      (oth ? '<small class="koth">이미 가져감 · ' + esc(oth) + '</small>' : '') + '</div>'; }).join('');
+  return '<section class="keyband need"><div class="kh"><b>🔑 키 가져가셨나요?</b><small>눌러야 그 층 객실 완료돼요</small>' + view + '</div>' + rows +
+    (chips ? '<div class="kchips">' + chips + '</div>' : '') + '</section>';
 }
 // 반납 안내 (마지막 객실 완료 때) — 받은 키만 적음, 키가 없으면 유실물 줄만. 문구는 허브에서 바꿀 수 있음 ({키} 자리에 '12층 A키')
 const RET_KEY = '🔑 {키} 챙겨서 사무실에 반납해 주세요.', RET_LOST = '🧳 고객 유실물이 있으면 사무실에 같이 반납해 주세요.';

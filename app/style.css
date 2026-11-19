@@ -538,26 +538,27 @@ body.adm main>.alert{background:var(--red-soft);color:var(--warn-red)}
 html.inhub body>header.top{display:none}
 html.inhub main{padding-top:12px}
 
-/* ---------- 🔑 플로어키 서명 (2026-11-19) — 객실 목록 위 키 띠 · 키 창 */
-.keyband{background:var(--surface);border:2px solid var(--done);border-radius:14px;padding:12px 14px;display:flex;flex-direction:column;gap:8px}
-.keyband.need{border-color:var(--issue);background:color-mix(in srgb,var(--issue) 6%,var(--surface));animation:kpulse 2.4s ease-in-out infinite}
-@keyframes kpulse{0%,100%{box-shadow:0 0 0 0 color-mix(in srgb,var(--issue) 0%,transparent)}50%{box-shadow:0 0 0 5px color-mix(in srgb,var(--issue) 22%,transparent)}}
-.keyband .kh b{display:block;font-size:17px;font-weight:900}
-.keyband.need .kh b{color:var(--issue)}
-.keyband .kh span{display:block;font-size:14px;color:var(--muted);margin-top:2px}
-.krow{display:flex;flex-wrap:wrap;align-items:center;gap:8px;border-top:1px solid var(--line);padding-top:8px}
-.krow .kf{font:800 20px var(--f-num);min-width:48px}
-.krow .kbtns{flex:1;display:grid;grid-template-columns:1fr 1fr 1.3fr;gap:6px}
-.krow .kbtns button,.kbig button,.kreasons button,.kall button{min-height:52px;border-radius:12px;border:2px solid var(--navy);background:var(--surface);color:var(--navy);font:900 17px var(--f-body);cursor:pointer;padding:4px 6px}
-.krow .kbtns .kno,.kbig .kno{border-color:var(--line);color:var(--muted);font-size:15px}
-.krow .koth,.panel .koth{flex-basis:100%;font-size:13px;color:var(--muted)}
-.krow.ok .kv{flex:1;font-weight:900;font-size:17px;color:var(--done)}
-.krow.ok .kv small{display:block;font-size:12px;font-weight:600;color:var(--muted)}
-.krow .kchg{min-height:44px;padding:0 14px;border-radius:10px;border:1px solid var(--line);background:var(--bg);color:var(--ink);font:700 14px var(--f-body);cursor:pointer}
-.kall{display:grid;grid-template-columns:1.4fr 1fr;gap:6px;border-top:1px dashed var(--line);padding-top:8px}
-.kall button{min-height:46px;font-size:15px;border-width:1.5px}
+/* ---------- 🔑 플로어키 서명 (2026-11-19) — 레포트가 주인공이라 작게: 다 알리면 한 줄, 안 알린 층만 버튼 */
+.keyband{background:var(--surface);border:1.5px solid var(--line);border-radius:12px;padding:8px 10px;display:flex;flex-direction:column;gap:6px}
+.keyband.done{flex-direction:row;align-items:center;gap:8px;padding:6px 8px}
+.keyband.need{border:2px solid var(--issue);background:color-mix(in srgb,var(--issue) 5%,var(--surface))}
+.keyband .kic{font-size:16px}
+.keyband .kchips{flex:1;display:flex;flex-wrap:wrap;gap:4px}
+.kchip{min-height:34px;padding:0 10px;border-radius:99px;border:1px solid color-mix(in srgb,var(--done) 45%,var(--line));background:var(--done-soft);color:var(--done);font:800 14px var(--f-body);cursor:pointer}
+.kchip.no{background:var(--bg);color:var(--muted);border-color:var(--line)}
+.keyband .kview{flex:none;min-height:34px;padding:0 12px;border-radius:99px;border:1px solid var(--navy);background:transparent;color:var(--navy);font:800 13px var(--f-body);cursor:pointer}
+.keyband .kh{display:flex;align-items:center;gap:6px}
+.keyband .kh b{font-size:15px;font-weight:900;color:var(--issue);white-space:nowrap}
+.keyband .kh small{flex:1;font-size:12px;color:var(--muted);line-height:1.25}
+.krow{display:flex;flex-wrap:wrap;align-items:center;gap:6px}
+.krow .kf{font:800 16px var(--f-num);min-width:40px}
+.krow .kbtns{flex:1;display:grid;grid-template-columns:1fr 1fr 1.4fr;gap:5px}
+.krow .kbtns button,.kbig button,.kreasons button{min-height:44px;border-radius:10px;border:2px solid var(--navy);background:var(--surface);color:var(--navy);font:900 16px var(--f-body);cursor:pointer;padding:2px 4px}
+.krow .kbtns .kno,.kbig .kno{border-color:var(--line);color:var(--muted);font-size:14px}
+.krow .koth,.panel .koth{flex-basis:100%;font-size:12px;color:var(--muted);padding-left:46px}
+.panel .koth{padding-left:0}
 .kbig{display:flex;flex-direction:column;gap:8px}
-.kbig button{min-height:60px;font-size:19px}
+.kbig button{min-height:58px;font-size:19px}
 .kbig.k4{display:grid;grid-template-columns:1fr 1fr}
 .kbig button[aria-pressed="true"],.kreasons button[aria-pressed="true"]{background:var(--navy);color:#fff}
 .kbig button:disabled{opacity:.35;cursor:default}
@@ -568,7 +569,6 @@ html.inhub main{padding-top:12px}
 .panel .kret p,.sum .keyret p{margin:0;font-size:18px;font-weight:800;color:var(--ink);line-height:1.45;background:var(--bg);border-radius:12px;padding:12px 14px}
 .sum .keyret{margin-top:10px;display:flex;flex-direction:column;gap:6px}
 .sum .keyret p{font-size:15px;padding:8px 12px}
-.keyband .kview{min-height:44px;border-radius:10px;border:1px dashed var(--navy);background:transparent;color:var(--navy);font:800 14px var(--f-body);cursor:pointer}
 .kwho{background:var(--bg);border-radius:12px;padding:10px 12px;font-size:15px;line-height:1.6}
 .klist{display:flex;flex-direction:column;border:1px solid var(--line);border-radius:12px;overflow:hidden}
 .kl{display:grid;grid-template-columns:56px 1fr 1fr;gap:6px;padding:7px 10px;border-top:1px solid var(--line);font-size:15px;align-items:center}
