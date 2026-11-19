@@ -6,7 +6,7 @@ import { makeLeaveApi } from './leave_my.js';
 import { setupVoc } from './voc.js';
 import * as K from './keys.js';   // 🔑 플로어키 서명 (2026-11-19)
 
-const APP_VER = '2026.11.19-12';
+const APP_VER = '2026.11.19-13';
 // 관리자 = 보안 규칙 isAdmin 과 같은 목록 (UID 는 공개돼도 되는 값)
 const ADMINS = [
   { uid: 'iw2orXgIgPgTbLUQa0b41XJ9Dvd2', label: '소장', email: 'unieshaeundae+admin@gmail.com' },
@@ -1341,7 +1341,8 @@ function keyClick(at) {
   if (at('[data-keypastx]')) { lsSet(keyPastKey(), '1'); update(); return true; }
   const room = dlg && dlg.room;
   const kb = at('[data-key]'); if (kb) { const [f, k] = kb.getAttribute('data-key').split(':'); keyPick([Number(f)], k, '', room); return true; }
-  const kn = at('[data-keynone]'); if (kn) { dlg = { kind: 'keynone', floors: [Number(kn.getAttribute('data-keynone'))], reason: '', etc: '', room }; drawDlg(); return true; }
+  // 11/19 사용자: 안 가져가요는 이유 안 물음 → 바로 저장 (잘못 누르면 [바꾸기])
+  const kn = at('[data-keynone]'); if (kn) { keyPick([Number(kn.getAttribute('data-keynone'))], '없음', '', room); return true; }
   const kc = at('[data-keychg]'); if (kc) { const f = Number(kc.getAttribute('data-keychg')), a = keyAns(f); if (!a) return true; dlg = { kind: 'keychg', floor: f, cur: a, pick: '', reason: '', etc: '' }; drawDlg(); return true; }
   const kr = at('[data-kreason]'); if (kr && dlg) { const e = $('#keyetc'); if (e) dlg.etc = e.value; dlg.reason = kr.getAttribute('data-kreason'); dlg.err = ''; drawDlg(); if (dlg.reason === '기타') { const t = $('#keyetc'); if (t) t.focus(); } return true; }
   const kp = at('[data-kpick]'); if (kp && dlg && dlg.kind === 'keychg') { dlg.pick = kp.getAttribute('data-kpick'); dlg.err = ''; drawDlg(); return true; }
@@ -1359,8 +1360,7 @@ function keyClick(at) {
     if (d.kind === 'keynone') { if (!d.reason) { d.err = '이유를 하나 골라 주세요.'; drawDlg(); return true; } keyPick(d.floors, '없음', keyReason(d), d.room); return true; }
     if (d.kind === 'keychg') {
       if (!d.pick) { d.err = '바꿀 것을 골라 주세요.'; drawDlg(); return true; }
-      if (d.pick === '없음' && !d.reason) { d.err = '안 가져간 이유를 골라 주세요.'; drawDlg(); return true; }
-      keyPick([d.floor], d.pick, d.pick === '없음' ? keyReason(d) : '', null); return true;
+      keyPick([d.floor], d.pick, '', null); return true;
     }
     if (d.kind === 'keydup') { keyPick(d.floors, d.key, d.reason, d.room, true); return true; }
   }
@@ -1388,7 +1388,7 @@ function keyDlgBody() {
     const opts = [['A', 'A키'], ['B', 'B키'], ['AB', 'A·B 둘 다'], ['없음', '안 가져가요']];
     return '<h3>' + d.floor + '층 키 바꾸기</h3><p>지금 기록: <b style="color:var(--ink)">' + esc(K.KEY_LABEL[d.cur.key] || d.cur.key) + '</b>' + (d.cur.reason ? ' (' + esc(d.cur.reason) + ')' : '') + ' · ' + keyTime(d.cur) +
       '<br>바꾸면 처음 기록과 바꾼 기록이 둘 다 남아요.</p><div class="kbig k4">' + opts.map(o => '<button data-kpick="' + o[0] + '" aria-pressed="' + (d.pick === o[0]) + '"' + (d.cur.key === o[0] ? ' disabled' : '') + '>' + o[1] + '</button>').join('') + '</div>' +
-      (d.pick === '없음' ? keyReasonHtml(d) : '') + errP() + '<div class="acts"><button data-x="1">취소</button>' + kbtn.replace('kok', 'go') + '이렇게 바꾸기</button></div>';
+      errP() + '<div class="acts"><button data-x="1">취소</button>' + kbtn.replace('kok', 'go') + '이렇게 바꾸기</button></div>';
   }
   if (k === 'keydup') return '<h3>잠깐요, 한 번 더 확인해 주세요</h3><div class="warnbox">' + d.dups.map(x => '<b>' + x.f + '층 ' + esc(K.KEY_LABEL[d.key]) + '</b>는 <b>' + esc(x.n.join(', ')) + '</b> 님이 이미 가져갔다고 했어요.').join('<br>') + '</div>' +
     '<p>손에 든 키 꼬리표를 다시 봐 주세요. 맞으면 그대로 저장해도 돼요 (관리자가 확인해요).</p><div class="acts"><button data-x="1">다시 고르기</button>' + kbtn.replace('kok', 'danger') + '그래도 저장</button></div>';
