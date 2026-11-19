@@ -5,7 +5,7 @@ import { setupMyWork } from './mywork.js';
 import { makeLeaveApi } from './leave_my.js';
 import { setupVoc } from './voc.js';
 
-const APP_VER = '2026.11.19-1';
+const APP_VER = '2026.11.19-2';
 // 관리자 = 보안 규칙 isAdmin 과 같은 목록 (UID 는 공개돼도 되는 값)
 const ADMINS = [
   { uid: 'iw2orXgIgPgTbLUQa0b41XJ9Dvd2', label: '소장', email: 'unieshaeundae+admin@gmail.com' },
