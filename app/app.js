@@ -6,7 +6,7 @@ import { makeLeaveApi } from './leave_my.js';
 import { setupVoc } from './voc.js';
 import * as K from './keys.js';   // 🔑 플로어키 서명 (2026-11-19)
 
-const APP_VER = '2026.11.19-9';
+const APP_VER = '2026.11.19-10';
 // 관리자 = 보안 규칙 isAdmin 과 같은 목록 (UID 는 공개돼도 되는 값)
 const ADMINS = [
   { uid: 'iw2orXgIgPgTbLUQa0b41XJ9Dvd2', label: '소장', email: 'unieshaeundae+admin@gmail.com' },
@@ -1254,6 +1254,7 @@ function keyGate(allDone) {
   const need = keyOn() && allDone && keyNotRet().length > 0;
   let el = document.getElementById('keygate');
   const k = 'rm_alldone_' + today + '|' + me;
+  if (keyOn() && !allDone && me) { gatePeek = 0; lsSet(k, null); }   // 객실이 다시 남으면(완료 취소 · 추가) 처음으로 → 다시 다 끝내면 약 5초 뒤 또 뜸
   if (!need) { if (el) el.remove(); document.body.classList.remove('gated'); return; }
   let since = Number(lsGet(k) || 0); if (!since) { since = Date.now(); lsSet(k, String(since)); }
   const wait = since + 5500 - Date.now();   // '오늘 정비 끝' 카드(5초)가 닫힐 즈음 점점 흐려지며 뜸
