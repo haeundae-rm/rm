@@ -6,7 +6,7 @@ import { makeLeaveApi } from './leave_my.js';
 import { setupVoc } from './voc.js';
 import * as K from './keys.js';   // 🔑 플로어키 서명 (2026-11-19)
 
-const APP_VER = '2026.11.19-6';
+const APP_VER = '2026.11.19-7';
 // 관리자 = 보안 규칙 isAdmin 과 같은 목록 (UID 는 공개돼도 되는 값)
 const ADMINS = [
   { uid: 'iw2orXgIgPgTbLUQa0b41XJ9Dvd2', label: '소장', email: 'unieshaeundae+admin@gmail.com' },
@@ -394,6 +394,7 @@ function render() {
     if (m) renderMaid(m, false);
     else $('#main').innerHTML = bands() + '<div class="notice"><strong>오늘 ' + esc(meLabel()) + ' 님 배정 객실이 없어요.</strong><br>휴무이거나 배정이 아직 올라오지 않았어요.</div><button class="foot" data-admin-in="1">관리자 메뉴</button>';
   }
+  if (isAdm || !me || data.noPlan || !data.maids[0]) keyGate(false);
   try { MW.inject(); } catch (e) { console.warn('내 근무 버튼', e); }
   window.scrollTo(0, y);
 }
@@ -470,7 +471,7 @@ function renderMaid(m, asAdmin) {
   if (!asAdmin) cheer(m, d, t, rem, bump, myPend);
   const dueLeft = m.rooms.filter(x => x.due && !recOf(recWho(m, x), x.room)).sort((a, b) => (a.due < b.due ? -1 : 1));
   const dirtyLeft = m.rooms.filter(x => isDirty(x.room) && !recOf(recWho(m, x), x.room));
-  let html = asAdmin ? '' : bands() + instHtml() + ventHtml() + swapBanner(m) + keyBand(m, allDone);
+  let html = asAdmin ? '' : bands() + keyPastHtml() + instHtml() + ventHtml() + swapBanner(m) + keyBand(m, allDone);
   html += asAdmin ? '<div class="amode"><button class="ghost back" data-back="1">← 전체 현황</button><span>' + (m.team && m.team.length > 1 ? esc(m.team.join('·')) + ' 조 화면 (조 휴대폰과 같음 · 객실을 누르면 배정받은 분 이름으로 대신 처리)' : esc(m.name) + ' 님 화면' + (m.mateOff ? ' · 2인 1조 (짝 ' + esc(m.mateOff) + ' 님 오늘 배정 없음)' : '') + ' (객실을 누르면 대신 처리)') + '</span></div>' : '';
   const tile = (cls, n, lbl, jump) => (jump ? '<button class="stat ' + cls + '" data-jump="' + esc(jump) + '">' : '<div class="stat ' + cls + '">') + '<b>' + n + '</b><span>' + lbl + '</span>' + (jump ? '</button>' : '</div>');
   const isTeam = !!(m.team && m.team.length > 1), teamName = isTeam ? m.team.join(' · ') : m.name;
@@ -496,6 +497,7 @@ function renderMaid(m, asAdmin) {
   html += '<p class="sec" style="font-weight:500">객실을 누르면 자가인스펙션 4개 항목을 확인하고 완료할 수 있어요.</p>';
   if (!asAdmin) html += '<button class="foot" data-admin-in="1">관리자 메뉴</button>';
   $('#main').innerHTML = html;
+  if (!asAdmin) keyGate(allDone);
 }
 // 절반 응원은 바로, 마지막 폭죽은 서버 저장 확인 뒤
 function cheer(m, d, t, rem, bump, myPend) {
@@ -504,7 +506,7 @@ function cheer(m, d, t, rem, bump, myPend) {
   if (rem !== 0) delete finArmed[k];
   if (finArmed[k] && !myPend) {
     delete finArmed[k];
-    if (!shown['fin' + k] && lsGet('rm_fin_' + k) !== '1') { shown['fin' + k] = 1; lsSet('rm_fin_' + k, '1'); confetti(); finCard(m, t); if (keyOn() && !dlg) { dlg = { kind: 'keyret' }; drawDlg(); } }
+    if (!shown['fin' + k] && lsGet('rm_fin_' + k) !== '1') { shown['fin' + k] = 1; lsSet('rm_fin_' + k, '1'); confetti(); finCard(m, t); }
     return;
   }
   if (bump && rem > 0 && t >= 4 && d * 2 >= t && !shown['half' + k] && lsGet('rm_half_' + k) !== '1') { shown['half' + k] = 1; lsSet('rm_half_' + k, '1'); toast('절반 왔어요! 힘내세요'); setTimeout(() => play('half'), 350); }
@@ -1244,6 +1246,68 @@ function retLines() {
   if (lost.trim()) out.push(lost);
   return out;
 }
+// ---------- 반납 블라인드 (2026-11-19 사용자 안): 마지막 객실 완료 10초 뒤, 받은 키가 있으면 레포트를 흐리게 가리고 [키 반납 완료]를 크게
+// [아직 일이 남았어요] = 30분 동안 걷음 (앱을 다시 열면 다시 뜸). 객실이 새로 생기면(남은 객실 > 0) 저절로 사라짐
+let gatePeek = 0, gateT = 0;
+function keyNotRet() { const R = K.latestRet(keyRet); return keyGot().filter(d => !R[d.maid + '|' + d.floor]); }
+function keyGate(allDone) {
+  const need = keyOn() && allDone && keyNotRet().length > 0;
+  let el = document.getElementById('keygate');
+  const k = 'rm_alldone_' + today + '|' + me;
+  if (!need) { if (el) el.remove(); document.body.classList.remove('gated'); return; }
+  let since = Number(lsGet(k) || 0); if (!since) { since = Date.now(); lsSet(k, String(since)); }
+  const wait = since + 10000 - Date.now();
+  if (wait > 0) { clearTimeout(gateT); gateT = setTimeout(update, wait + 100); }
+  const show = wait <= 0 && gatePeek < Date.now() && !(dlg && dlg.kind !== 'keyret');
+  if (!show) { if (el) el.remove(); document.body.classList.remove('gated'); return; }
+  const L = keyNotRet(), c = keyCfg || {}, lost = c.lostText == null ? RET_LOST : String(c.lostText);
+  const html = '<div class="kg"><span class="kgi">🔑</span><b class="kgt">오늘 정비 끝! 키를 반납해 주세요</b>' +
+    '<div class="kgk">' + L.map(d => '<span>' + d.floor + '층 ' + esc(K.KEY_LABEL[d.key]) + '</span>').join('') + '</div>' +
+    '<p>사무실에 키를 걸어 두고 아래 버튼을 눌러 주세요.</p>' + (lost.trim() ? '<p class="kgl">' + esc(lost) + '</p>' : '') +
+    '<button class="kgo" data-gatedone="1">키 반납 완료</button><button class="kgp" data-gatepeek="1">아직 일이 남았어요 · 레포트 보기</button></div>';
+  if (!el) { el = document.createElement('div'); el.id = 'keygate'; el.className = 'keygate'; document.body.appendChild(el); }
+  if (el.innerHTML !== html) el.innerHTML = html;
+  document.body.classList.add('gated');
+}
+function keyRetAll() {
+  const L = keyNotRet(); if (!L.length) return;
+  L.forEach(d => { S.add('days/' + today + '/keyret', { floor: d.floor, maid: d.maid, on: true, at: S.SERVER_TIME, clientAt: new Date(), uid: user.uid }).done
+    .catch(e => { report('키 반납', d.floor + '층 ' + (e && e.code || '') + ' ' + (e && e.message || e)); say(d.floor + '층 반납 표시가 저장되지 않았어요. ' + errText(e)); }); });
+  vibe(40); play('stamp'); toast('키 반납 완료! 수고하셨어요'); update();
+}
+// ---------- 다음 근무 날 안내: 지난번(최근 7일 중 키를 가져간 마지막 날) [키 반납 완료]를 안 눌렀으면 맨 위에 한 번
+let keyPast = null, keyPastAsked = '';
+function keyPastKey() { return 'rm_keypast_' + today + '|' + me; }
+async function scanKeyPast() {
+  const nm = me, mine = keyMine(), from = (keyCfg && keyCfg.from) || today;
+  for (let i = 1; i <= 7; i++) {
+    const d = addDays(today, -i); if (d < from) break;
+    let ks; try { ks = await S.getQuery('days/' + d + '/keys', [['maid', 'in', mine]]); } catch (e) { return; }
+    const lat = K.latest(ks), got = Object.keys(lat).map(k => lat[k]).filter(x => x.key !== '없음');
+    if (!ks.length) continue;
+    if (!got.length) break;   // 그날은 키를 안 가져감 → 확인할 것 없음
+    let rt = [], ck = [];
+    try { [rt, ck] = await Promise.all([S.getQuery('days/' + d + '/keyret', [['maid', 'in', mine]]), S.getQuery('days/' + d + '/keychk', [])]); } catch (e) { return; }
+    const R = K.latestRet(rt), C = K.latestChk(ck);
+    const miss = got.filter(x => !R[x.maid + '|' + x.floor]);
+    if (me !== nm) return;
+    if (miss.length) {
+      const inOffice = miss.every(x => (x.key === 'AB' ? ['A', 'B'] : [x.key]).every(k => C[x.floor] && C[x.floor][k] && C[x.floor][k].st === 'in'));
+      keyPast = { day: d, keys: miss.map(x => x.floor + '층 ' + K.KEY_LABEL[x.key]).join(', '), soft: inOffice };
+      update();
+    }
+    return;
+  }
+}
+function keyPastHtml() {
+  if (!keyOn()) return '';
+  if (keyPastAsked !== today + me) { keyPastAsked = today + me; keyPast = null; scanKeyPast(); }
+  if (!keyPast || lsGet(keyPastKey()) === '1') return '';
+  const md = Number(keyPast.day.slice(5, 7)) + '/' + Number(keyPast.day.slice(8));
+  return '<div class="band keypast"><b>🔑 ' + esc(me) + ' 님, 지난번(' + md + ') 키 반납 확인이 되지 않았어요</b>' +
+    (keyPast.soft ? esc(keyPast.keys) + '는 사무실에 잘 들어왔는데 [키 반납 완료]를 안 누르셨어요. 오늘 퇴근할 때는 꼭 눌러 주세요.' : esc(keyPast.keys) + ' · 퇴근할 때 꼭 반납하고 [키 반납 완료]를 눌러 주세요.') +
+    '<div class="acts" style="margin-top:8px"><button data-keypastx="1">확인했어요</button></div></div>';
+}
 function keyWrite(f, key, reason) {
   const r = S.add('days/' + today + '/keys', { floor: Number(f), maid: me, key, reason: String(reason || '').slice(0, 40), by: '본인', who: '', at: S.SERVER_TIME, clientAt: new Date(), uid: user.uid });
   r.done.catch(e => { report('키', f + '층 ' + (e && e.code || '') + ' ' + (e && e.message || e)); say(f + '층 키 기록이 저장되지 않았어요. ' + errText(e)); });
@@ -1262,6 +1326,9 @@ function keyPick(floors, key, reason, room, force) {
 function keyReason(d) { return d.reason === '기타' ? ('기타' + (String(d.etc || '').trim() ? ': ' + String(d.etc).trim() : '')).slice(0, 40) : d.reason; }
 function keyClick(at) {
   if (!keyOn()) return false;
+  if (at('[data-gatedone]')) { keyRetAll(); return true; }
+  if (at('[data-gatepeek]')) { gatePeek = Date.now() + 30 * 60000; setTimeout(update, 30 * 60000 + 500); update(); toast('30분 뒤에 다시 알려 드릴게요'); return true; }
+  if (at('[data-keypastx]')) { lsSet(keyPastKey(), '1'); update(); return true; }
   const room = dlg && dlg.room;
   const kb = at('[data-key]'); if (kb) { const [f, k] = kb.getAttribute('data-key').split(':'); keyPick([Number(f)], k, '', room); return true; }
   const kn = at('[data-keynone]'); if (kn) { dlg = { kind: 'keynone', floors: [Number(kn.getAttribute('data-keynone'))], reason: '', etc: '', room }; drawDlg(); return true; }

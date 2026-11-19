@@ -3,7 +3,7 @@
 export const SERVER_TIME = { __server: 1 };
 export const kind = 'demo';
 const seoul = (t = Date.now()) => new Date(t + 9 * 3600e3);
-const DAY = seoul().toISOString().slice(0, 10);
+const DAY = seoul().toISOString().slice(0, 10), YDAY = seoul(Date.now() - 864e5).toISOString().slice(0, 10);
 const at = (h, m) => Date.parse(DAY + 'T' + ('0' + h).slice(-2) + ':' + ('0' + m).slice(-2) + ':00+09:00');
 const room = r => ({ room: String(r), tags: [], note: '', due: '', after: '', memo: '' });
 function seed() {
@@ -13,7 +13,9 @@ function seed() {
   s['days/' + DAY + '/plans/예시 동료'] = { rooms: [1203, 1204, 1206].map(room) };
   s['days/' + DAY + '/plans/예시 메이드'] = { rooms: [2501, 2502].map(room) };
   s['devices/demo'] = { name: '체험 메이드', date: DAY };
-  s['meta/keys'] = { from: DAY, on: true };
+  s['meta/keys'] = { from: YDAY, on: true };
+  // 어제 12층 A키를 가져가고 [키 반납 완료]를 안 누른 것으로 → 맨 위 '지난번 반납 확인' 안내 체험
+  s['days/' + YDAY + '/keys/y1'] = { floor: 12, maid: '체험 메이드', key: 'A', reason: '', by: '본인', who: '', at: at(8, 30) - 864e5, clientAt: at(8, 30) - 864e5, uid: 'demo' };
   s['days/' + DAY + '/keys/d1'] = { floor: 12, maid: '예시 동료', key: 'A', reason: '', by: '본인', who: '', at: at(8, 31), clientAt: at(8, 31), uid: 'x' };
   s['days/' + DAY + '/keys/d2'] = { floor: 25, maid: '예시 메이드', key: 'AB', reason: '', by: '본인', who: '', at: at(8, 35), clientAt: at(8, 35), uid: 'y' };
   s['days/' + DAY + '/keychk/c1'] = { floor: 25, key: 'A', st: 'in', by: '하우스키퍼', at: at(12, 50), clientAt: at(12, 50) };

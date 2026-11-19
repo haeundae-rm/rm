@@ -582,3 +582,17 @@ html.inhub main{padding-top:12px}
 .kl .kred{color:var(--issue);font-weight:700}
 .kchip.ret{background:var(--surface);color:var(--navy);border:2px solid var(--navy)}
 .kchip.ret.on{background:var(--done);border-color:var(--done);color:#fff}
+/* 반납 블라인드 · 지난번 반납 안내 (2026-11-19) */
+body.gated #main,body.gated .top{filter:blur(5px);pointer-events:none;user-select:none}
+.keygate{position:fixed;inset:0;z-index:36;display:flex;align-items:center;justify-content:center;padding:20px;background:rgba(243,245,248,.55)}
+.keygate .kg{width:100%;max-width:360px;background:var(--surface);border-radius:24px;padding:24px 20px 16px;box-shadow:0 20px 50px rgba(17,24,39,.25);display:flex;flex-direction:column;align-items:center;gap:10px;text-align:center}
+.keygate .kgi{font-size:44px;line-height:1}
+.keygate .kgt{font-size:21px;font-weight:900}
+.keygate .kgk{display:flex;flex-wrap:wrap;gap:6px;justify-content:center}
+.keygate .kgk span{background:var(--navy);color:#fff;font:900 18px var(--f-body);border-radius:12px;padding:6px 12px}
+.keygate p{margin:0;font-size:15px;color:var(--muted);line-height:1.45}
+.keygate .kgl{background:var(--bg);border-radius:12px;padding:10px 12px;color:var(--ink);font-weight:700}
+.keygate .kgo{width:100%;min-height:68px;margin-top:6px;border:0;border-radius:16px;background:var(--done);color:#fff;font:900 22px var(--f-body);cursor:pointer}
+.keygate .kgp{border:0;background:transparent;color:var(--muted);font:600 14px var(--f-body);text-decoration:underline;padding:10px;cursor:pointer}
+.band.keypast{background:#FFF6D6;border:1.5px solid #E7C46A;color:#5A4300}
+.band.keypast b{display:block;color:#5A4300}
