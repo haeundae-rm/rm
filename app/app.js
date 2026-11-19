@@ -6,7 +6,7 @@ import { makeLeaveApi } from './leave_my.js';
 import { setupVoc } from './voc.js';
 import * as K from './keys.js';   // 🔑 플로어키 서명 (2026-11-19)
 
-const APP_VER = '2026.11.19-10';
+const APP_VER = '2026.11.19-11';
 // 관리자 = 보안 규칙 isAdmin 과 같은 목록 (UID 는 공개돼도 되는 값)
 const ADMINS = [
   { uid: 'iw2orXgIgPgTbLUQa0b41XJ9Dvd2', label: '소장', email: 'unieshaeundae+admin@gmail.com' },
@@ -468,7 +468,7 @@ function renderMaid(m, asAdmin) {
   const allDone = rem === 0 && t > 0 && !myPend;   // '끝'은 서버가 받은 뒤에
   const prev = lastRem[m.name], bump = prev !== undefined && rem < prev;
   lastRem[m.name] = rem;
-  if (!asAdmin) cheer(m, d, t, rem, bump, myPend);
+  if (!asAdmin) cheer(m, d, t, rem, bump, myPend, prev);
   const dueLeft = m.rooms.filter(x => x.due && !recOf(recWho(m, x), x.room)).sort((a, b) => (a.due < b.due ? -1 : 1));
   const dirtyLeft = m.rooms.filter(x => isDirty(x.room) && !recOf(recWho(m, x), x.room));
   let html = asAdmin ? '' : bands() + keyPastHtml() + instHtml() + ventHtml() + swapBanner(m) + keyBand(m, allDone);
@@ -500,8 +500,14 @@ function renderMaid(m, asAdmin) {
   if (!asAdmin) keyGate(allDone);
 }
 // 절반 응원은 바로, 마지막 폭죽은 서버 저장 확인 뒤
-function cheer(m, d, t, rem, bump, myPend) {
+function cheer(m, d, t, rem, bump, myPend, prev) {
   const k = today + '|' + m.name;
+  // 완료를 취소해서 다시 내려가면 (11/19 사용자 요청) 다시 올라갈 때 절반 · 폭죽을 또 보여 줌
+  // (처음 열 때 기록이 늦게 들어와 숫자가 줄어드는 건 '내려감'이 아니라서 다시 안 터짐)
+  if (prev !== undefined && rem > prev) {
+    if (prev === 0) { delete shown['fin' + k]; lsSet('rm_fin_' + k, null); }
+    if (t >= 4 && d * 2 < t) { delete shown['half' + k]; lsSet('rm_half_' + k, null); }
+  }
   if (bump && rem === 0) finArmed[k] = 1;
   if (rem !== 0) delete finArmed[k];
   if (finArmed[k] && !myPend) {
