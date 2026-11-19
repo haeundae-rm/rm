@@ -35,18 +35,22 @@ export function makeLeaveApi(S, uidOf) {
     const n = cleanName(name);
     return out.filter(p => p.name === n || (p.alias || []).indexOf(n) >= 0)[0] || (n === cleanName(d.name) ? out.filter(p => p.pid === d.pids[0])[0] : null) || null;
   }
-  // 보관해 둔 것 + 바뀐 것만 받기 (key 마다)
-  async function synced(col, pid, field) {
+  // 본인 것 받기 (key 마다). 2026-11-19: 'pid + 바뀐 시각' 두 조건 검색은 Firestore 색인이 있어야 해서
+  // 두 번째 열 때부터 "The query requires an index" 오류가 났음 → pid 한 조건으로만 받음 (색인 필요 없음, 한 사람 문서 수가 적어 읽기 부담 작음).
+  // 서버에 못 닿으면 보관해 둔 것을 보여줌.
+  async function synced(col, pid) {
     const m = await meta(), key = 'rm_lv_' + col + '_' + pid, c = lsG(key);
-    let docs = c && c.imp === String(m.importedAt || '') ? c.docs : {};
-    const t = Object.keys(docs).reduce((x, id) => Math.max(x, Number(docs[id][field]) || 0), 0);
-    const w = [['pid', '==', pid]].concat(t ? [[field, '>', new Date(t - 5 * 60e3)]] : []);
-    (await S.getQuery(col, w)).forEach(x => { docs[x.id] = x.data; });
+    const old = c && c.imp === String(m.importedAt || '') ? c.docs : null;
+    let got;
+    try { got = await S.getQuery(col, [['pid', '==', pid]]); }
+    catch (e) { if (old) return old; throw e; }
+    const docs = {};
+    got.forEach(x => { docs[x.id] = x.data; });
     lsS(key, { imp: String(m.importedAt || ''), docs });
     return docs;
   }
-  async function myApps(pid) { const d = await synced('leave_apps', pid, 'upd'); return Object.keys(d).map(id => d[id]).filter(a => !a.deleted && a.start); }
-  async function myRecs(pid) { const d = await synced('leave_recs', pid, 'at'); return Object.keys(d).map(id => d[id]); }
+  async function myApps(pid) { const d = await synced('leave_apps', pid); return Object.keys(d).map(id => d[id]).filter(a => !a.deleted && a.start); }
+  async function myRecs(pid) { const d = await synced('leave_recs', pid); return Object.keys(d).map(id => d[id]); }
   async function busy(pid, mine) {
     const b = await S.get('meta/leave_busy').catch(() => null), d = Object.assign({}, (b && b.d) || {});
     // 이 지도에는 내 신청도 들어 있음 → 내 날짜는 1명씩 뺌 (관리자가 마지막으로 열었을 때 기준)
