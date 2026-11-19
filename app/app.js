@@ -6,7 +6,7 @@ import { makeLeaveApi } from './leave_my.js';
 import { setupVoc } from './voc.js';
 import * as K from './keys.js';   // 🔑 플로어키 서명 (2026-11-19)
 
-const APP_VER = '2026.11.19-3';
+const APP_VER = '2026.11.19-4';
 // 관리자 = 보안 규칙 isAdmin 과 같은 목록 (UID 는 공개돼도 되는 값)
 const ADMINS = [
   { uid: 'iw2orXgIgPgTbLUQa0b41XJ9Dvd2', label: '소장', email: 'unieshaeundae+admin@gmail.com' },
@@ -1224,8 +1224,7 @@ function keyBand(m) {
   const head = miss.length
     ? '<div class="kh"><b>🔑 키 가져가실 때 눌러 주세요</b><span>' + miss.map(f => f + '층').join(' · ') + ' 키를 알려 주셔야 그 층 객실을 완료할 수 있어요.</span></div>'
     : '<div class="kh"><b>🔑 오늘 키 기록 완료</b><span>퇴근 전에 키를 사무실에 반납해 주세요. 잘못 눌렀으면 [바꾸기]</span></div>';
-  const all = miss.length > 1 ? '<div class="kall"><button data-keyall="A">남은 ' + miss.length + '개 층 모두 A키</button><button data-keyall="B">모두 B키</button></div>' : '';
-  return '<section class="keyband' + (miss.length ? ' need' : ' done') + '">' + head + rows + all + '<button class="kview" data-keylist="1">🔑 전체 키 현황 · 누가 어느 층 키를 가졌나</button></section>';
+  return '<section class="keyband' + (miss.length ? ' need' : ' done') + '">' + head + rows + '<button class="kview" data-keylist="1">🔑 전체 키 현황 · 누가 어느 층 키를 가졌나</button></section>';
 }
 // 반납 안내 (마지막 객실 완료 때) — 받은 키만 적음, 키가 없으면 유실물 줄만. 문구는 허브에서 바꿀 수 있음 ({키} 자리에 '12층 A키')
 const RET_KEY = '🔑 {키} 챙겨서 사무실에 반납해 주세요.', RET_LOST = '🧳 고객 유실물이 있으면 사무실에 같이 반납해 주세요.';
@@ -1259,7 +1258,6 @@ function keyClick(at) {
   if (!keyOn()) return false;
   const room = dlg && dlg.room;
   const kb = at('[data-key]'); if (kb) { const [f, k] = kb.getAttribute('data-key').split(':'); keyPick([Number(f)], k, '', room); return true; }
-  const ka = at('[data-keyall]'); if (ka) { keyPick(keyMiss(), ka.getAttribute('data-keyall'), '', null); return true; }
   const kn = at('[data-keynone]'); if (kn) { dlg = { kind: 'keynone', floors: [Number(kn.getAttribute('data-keynone'))], reason: '', etc: '', room }; drawDlg(); return true; }
   const kc = at('[data-keychg]'); if (kc) { const f = Number(kc.getAttribute('data-keychg')), a = keyAns(f); if (!a) return true; dlg = { kind: 'keychg', floor: f, cur: a, pick: '', reason: '', etc: '' }; drawDlg(); return true; }
   const kr = at('[data-kreason]'); if (kr && dlg) { const e = $('#keyetc'); if (e) dlg.etc = e.value; dlg.reason = kr.getAttribute('data-kreason'); dlg.err = ''; drawDlg(); if (dlg.reason === '기타') { const t = $('#keyetc'); if (t) t.focus(); } return true; }
