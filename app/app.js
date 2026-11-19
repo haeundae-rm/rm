@@ -6,7 +6,7 @@ import { makeLeaveApi } from './leave_my.js';
 import { setupVoc } from './voc.js';
 import * as K from './keys.js';   // 🔑 플로어키 서명 (2026-11-19)
 
-const APP_VER = '2026.11.19-11';
+const APP_VER = '2026.11.19-12';
 // 관리자 = 보안 규칙 isAdmin 과 같은 목록 (UID 는 공개돼도 되는 값)
 const ADMINS = [
   { uid: 'iw2orXgIgPgTbLUQa0b41XJ9Dvd2', label: '소장', email: 'unieshaeundae+admin@gmail.com' },
@@ -345,7 +345,7 @@ function finCard(m, t) {
   const box = document.createElement('div'); box.className = 'fincard'; box.setAttribute('role', 'status');
   const md = today.slice(5).replace('-', '.');
   box.innerHTML = '<div class="fc"><span class="gold-seal"><i>' + md + '</i><b>오늘 끝</b></span><span class="fn">' + t + '실</span><b class="ft">오늘 정비 끝!</b><span class="fs">' + esc(m.name) + ' 님, 정말 수고하셨어요. 푹 쉬세요.</span><button class="big" data-fin-x="1">닫기</button></div>';
-  const close = () => { box.classList.add('out'); setTimeout(() => box.remove(), 260); };
+  const close = () => { box.classList.add('out'); setTimeout(() => { box.remove(); update(); }, 260); };   // 닫히면 바로 반납 창 (11/19)
   box.addEventListener('click', close);
   document.body.appendChild(box); setTimeout(close, 5200);
 }
@@ -1263,24 +1263,27 @@ function keyGate(allDone) {
   if (keyOn() && !allDone && me) { gatePeek = 0; lsSet(k, null); }   // 객실이 다시 남으면(완료 취소 · 추가) 처음으로 → 다시 다 끝내면 약 5초 뒤 또 뜸
   if (!need) { if (el) el.remove(); document.body.classList.remove('gated'); return; }
   let since = Number(lsGet(k) || 0); if (!since) { since = Date.now(); lsSet(k, String(since)); }
-  const wait = since + 5500 - Date.now();   // '오늘 정비 끝' 카드(5초)가 닫힐 즈음 점점 흐려지며 뜸
-  if (wait > 0) { clearTimeout(gateT); gateT = setTimeout(update, wait + 100); }
-  const show = wait <= 0 && gatePeek < Date.now() && !(dlg && dlg.kind !== 'keyret');
+  // '오늘 정비 끝' 카드가 닫히면(확인 누름 · 5초 자동) 바로 점점 흐려지며 뜸 (11/19 사용자: 2초 안에). 카드가 없으면 1.2초 뒤
+  const fin = !!document.querySelector('.fincard'), wait = since + 1200 - Date.now();
+  if (wait > 0 || fin) { clearTimeout(gateT); gateT = setTimeout(update, Math.max(wait, 0) + (fin ? 600 : 100)); }
+  const show = wait <= 0 && !fin && gatePeek < Date.now() && !(dlg && dlg.kind !== 'keyret');
   if (!show) { if (el) el.remove(); document.body.classList.remove('gated'); return; }
   const L = keyNotRet(), c = keyCfg || {}, lost = c.lostText == null ? RET_LOST : String(c.lostText);
   const html = '<div class="kg"><span class="kgi">🎉</span><b class="kgt">축하드려요! 곧 퇴근이에요</b>' +
-    '<p>잊지 마시고 아래 키를 <b>사무실에 실제로 반납한 뒤</b><br>확인 버튼을 한 번만 눌러 주세요.</p>' +
-    '<div class="kgk">' + L.map(d => '<span>🔑 ' + d.floor + '층 ' + esc(K.KEY_LABEL[d.key]) + '</span>').join('') + '</div>' + (lost.trim() ? '<p class="kgl">' + esc(lost) + '</p>' : '') +
-    '<button class="kgo" data-gatedone="1">키 반납했어요 · 확인</button><button class="kgp" data-gatepeek="1">아직 일이 남았어요 · 레포트 보기</button></div>';
-  if (!el) { el = document.createElement('div'); el.id = 'keygate'; el.className = 'keygate'; document.body.appendChild(el); }
+    '<p>잊지 마시고 키를 <b>사무실에 실제로 반납한 뒤</b><br>키마다 [반납 완료]를 눌러 주세요.</p>' +
+    '<div class="kgk">' + keyGot().map(d => { const r = K.latestRet(keyRet)[d.maid + '|' + d.floor];
+      return '<div class="kgr' + (r ? ' on' : '') + '"><b>🔑 ' + d.floor + '층 ' + esc(K.KEY_LABEL[d.key]) + '</b>' + (r ? '<span>✔ 반납 ' + keyTime(r) + '</span>' : '<button data-gateone="' + d.floor + '">반납 완료</button>') + '</div>'; }).join('') + '</div>' + (lost.trim() ? '<p class="kgl">' + esc(lost) + '</p>' : '') +
+    '<button class="kgp" data-gatepeek="1">아직 일이 남았어요 · 레포트 보기</button></div>';
+  if (!el) { el = document.createElement('div'); el.id = 'keygate'; el.className = 'keygate fresh'; document.body.appendChild(el); setTimeout(() => el.classList.remove('fresh'), 1000); }
   if (el.innerHTML !== html) el.innerHTML = html;
   document.body.classList.add('gated');
 }
-function keyRetAll() {
-  const L = keyNotRet(); if (!L.length) return;
+function keyRetOne(f) {
+  const L = keyNotRet().filter(d => d.floor === f); if (!L.length) return;
+  const last = keyNotRet().length === L.length;
   L.forEach(d => { S.add('days/' + today + '/keyret', { floor: d.floor, maid: d.maid, on: true, at: S.SERVER_TIME, clientAt: new Date(), uid: user.uid }).done
     .catch(e => { report('키 반납', d.floor + '층 ' + (e && e.code || '') + ' ' + (e && e.message || e)); say(d.floor + '층 반납 표시가 저장되지 않았어요. ' + errText(e)); }); });
-  vibe(40); play('stamp'); toast('키 반납 완료! 수고하셨어요'); update();
+  vibe(40); play('stamp'); toast(last ? '키 반납 완료! 수고하셨어요' : f + '층 키 반납 완료'); update();
 }
 // ---------- 다음 근무 날 안내: 지난번(최근 7일 중 키를 가져간 마지막 날) [키 반납했어요]를 안 눌렀으면 맨 위에 한 번
 let keyPast = null, keyPastAsked = '';
@@ -1333,7 +1336,7 @@ function keyPick(floors, key, reason, room, force) {
 function keyReason(d) { return d.reason === '기타' ? ('기타' + (String(d.etc || '').trim() ? ': ' + String(d.etc).trim() : '')).slice(0, 40) : d.reason; }
 function keyClick(at) {
   if (!keyOn()) return false;
-  if (at('[data-gatedone]')) { keyRetAll(); return true; }
+  const g1 = at('[data-gateone]'); if (g1) { keyRetOne(Number(g1.getAttribute('data-gateone'))); return true; }
   if (at('[data-gatepeek]')) { gatePeek = Date.now() + 30 * 60000; setTimeout(update, 30 * 60000 + 500); update(); toast('30분 뒤에 다시 알려 드릴게요'); return true; }
   if (at('[data-keypastx]')) { lsSet(keyPastKey(), '1'); update(); return true; }
   const room = dlg && dlg.room;
