@@ -602,3 +602,16 @@ body.gated #main,body.gated .top{filter:blur(5px);pointer-events:none;user-selec
 .keygate .kgp{border:0;background:transparent;color:var(--muted);font:600 14px var(--f-body);text-decoration:underline;padding:10px;cursor:pointer}
 .band.keypast{background:#FFF6D6;border:1.5px solid #E7C46A;color:#5A4300}
 .band.keypast b{display:block;color:#5A4300}
+/* 11/20: 현황 창 스크롤 (패널 안 목록이 줄어들며 잘리던 것) · 키 띠 글자 키우기 (메이드 의견) */
+.panel{overscroll-behavior:contain;-webkit-overflow-scrolling:touch}
+.panel>*{flex-shrink:0}
+.keyband.done{padding:8px 10px;gap:10px}
+.keyband .kic{font-size:22px}
+.keyband .kchips{gap:6px}
+.kchip{min-height:44px;padding:0 14px;font-size:18px;border-width:1.5px}
+.keyband .kview{min-height:44px;padding:0 14px;font-size:16px;border-width:2px}
+.keyband .kh b{font-size:17px}
+.keyband .kh small{font-size:14px}
+.kl{font-size:16px;padding:9px 10px}
+.kl small{font-size:13px}
+.kl .kin-o{font-size:14px}
