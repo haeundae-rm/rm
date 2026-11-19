@@ -6,7 +6,7 @@ import { makeLeaveApi } from './leave_my.js';
 import { setupVoc } from './voc.js';
 import * as K from './keys.js';   // 🔑 플로어키 서명 (2026-11-19)
 
-const APP_VER = '2026.11.19-7';
+const APP_VER = '2026.11.19-8';
 // 관리자 = 보안 규칙 isAdmin 과 같은 목록 (UID 는 공개돼도 되는 값)
 const ADMINS = [
   { uid: 'iw2orXgIgPgTbLUQa0b41XJ9Dvd2', label: '소장', email: 'unieshaeundae+admin@gmail.com' },
@@ -1246,7 +1246,7 @@ function retLines() {
   if (lost.trim()) out.push(lost);
   return out;
 }
-// ---------- 반납 블라인드 (2026-11-19 사용자 안): 마지막 객실 완료 10초 뒤, 받은 키가 있으면 레포트를 흐리게 가리고 [키 반납 완료]를 크게
+// ---------- 반납 블라인드 (2026-11-19 사용자 안): 마지막 객실 완료 10초 뒤, 받은 키가 있으면 레포트를 흐리게 가리고 [키 반납했어요]를 크게
 // [아직 일이 남았어요] = 30분 동안 걷음 (앱을 다시 열면 다시 뜸). 객실이 새로 생기면(남은 객실 > 0) 저절로 사라짐
 let gatePeek = 0, gateT = 0;
 function keyNotRet() { const R = K.latestRet(keyRet); return keyGot().filter(d => !R[d.maid + '|' + d.floor]); }
@@ -1261,10 +1261,10 @@ function keyGate(allDone) {
   const show = wait <= 0 && gatePeek < Date.now() && !(dlg && dlg.kind !== 'keyret');
   if (!show) { if (el) el.remove(); document.body.classList.remove('gated'); return; }
   const L = keyNotRet(), c = keyCfg || {}, lost = c.lostText == null ? RET_LOST : String(c.lostText);
-  const html = '<div class="kg"><span class="kgi">🔑</span><b class="kgt">오늘 정비 끝! 키를 반납해 주세요</b>' +
-    '<div class="kgk">' + L.map(d => '<span>' + d.floor + '층 ' + esc(K.KEY_LABEL[d.key]) + '</span>').join('') + '</div>' +
-    '<p>사무실에 키를 걸어 두고 아래 버튼을 눌러 주세요.</p>' + (lost.trim() ? '<p class="kgl">' + esc(lost) + '</p>' : '') +
-    '<button class="kgo" data-gatedone="1">키 반납 완료</button><button class="kgp" data-gatepeek="1">아직 일이 남았어요 · 레포트 보기</button></div>';
+  const html = '<div class="kg"><span class="kgi">🎉</span><b class="kgt">축하드려요! 곧 퇴근이에요</b>' +
+    '<p>잊지 마시고 아래 키를 <b>사무실에 실제로 반납한 뒤</b><br>확인 버튼을 한 번만 눌러 주세요.</p>' +
+    '<div class="kgk">' + L.map(d => '<span>🔑 ' + d.floor + '층 ' + esc(K.KEY_LABEL[d.key]) + '</span>').join('') + '</div>' + (lost.trim() ? '<p class="kgl">' + esc(lost) + '</p>' : '') +
+    '<button class="kgo" data-gatedone="1">키 반납했어요 · 확인</button><button class="kgp" data-gatepeek="1">아직 일이 남았어요 · 레포트 보기</button></div>';
   if (!el) { el = document.createElement('div'); el.id = 'keygate'; el.className = 'keygate'; document.body.appendChild(el); }
   if (el.innerHTML !== html) el.innerHTML = html;
   document.body.classList.add('gated');
@@ -1275,7 +1275,7 @@ function keyRetAll() {
     .catch(e => { report('키 반납', d.floor + '층 ' + (e && e.code || '') + ' ' + (e && e.message || e)); say(d.floor + '층 반납 표시가 저장되지 않았어요. ' + errText(e)); }); });
   vibe(40); play('stamp'); toast('키 반납 완료! 수고하셨어요'); update();
 }
-// ---------- 다음 근무 날 안내: 지난번(최근 7일 중 키를 가져간 마지막 날) [키 반납 완료]를 안 눌렀으면 맨 위에 한 번
+// ---------- 다음 근무 날 안내: 지난번(최근 7일 중 키를 가져간 마지막 날) [키 반납했어요]를 안 눌렀으면 맨 위에 한 번
 let keyPast = null, keyPastAsked = '';
 function keyPastKey() { return 'rm_keypast_' + today + '|' + me; }
 async function scanKeyPast() {
@@ -1305,7 +1305,7 @@ function keyPastHtml() {
   if (!keyPast || lsGet(keyPastKey()) === '1') return '';
   const md = Number(keyPast.day.slice(5, 7)) + '/' + Number(keyPast.day.slice(8));
   return '<div class="band keypast"><b>🔑 ' + esc(me) + ' 님, 지난번(' + md + ') 키 반납 확인이 되지 않았어요</b>' +
-    (keyPast.soft ? esc(keyPast.keys) + '는 사무실에 잘 들어왔는데 [키 반납 완료]를 안 누르셨어요. 오늘 퇴근할 때는 꼭 눌러 주세요.' : esc(keyPast.keys) + ' · 퇴근할 때 꼭 반납하고 [키 반납 완료]를 눌러 주세요.') +
+    (keyPast.soft ? esc(keyPast.keys) + '는 사무실에 잘 들어왔는데 [키 반납했어요]를 안 누르셨어요. 오늘 퇴근할 때는 꼭 눌러 주세요.' : esc(keyPast.keys) + ' · 퇴근할 때 꼭 반납하고 [키 반납했어요]를 눌러 주세요.') +
     '<div class="acts" style="margin-top:8px"><button data-keypastx="1">확인했어요</button></div></div>';
 }
 function keyWrite(f, key, reason) {
