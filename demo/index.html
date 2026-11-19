@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="color-scheme" content="only light">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>정비 레포트 · 키 서명 체험</title>
+<meta name="robots" content="noindex">
+<link rel="icon" type="image/png" href="../icon-192.png">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;900&family=Inter:wght@600;700;800&display=swap">
+<link rel="stylesheet" href="../app/style.css?v=2026.11.19-3">
+<!-- 체험 (2026-11-19): 정비 레포트 화면(app.js)을 그대로 쓰되, 저장소(store.js)만 이 폴더의 가짜로 바꿔 끼움 → 실제 기록에 안 남음 -->
+<script type="importmap">{ "imports": { "../app/store.js": "./store.js" } }</script>
+<style>
+.demo{position:sticky;top:0;z-index:30;background:#FFE58A;color:#3D2E00;font:800 14px "Noto Sans KR",sans-serif;padding:8px 12px;display:flex;align-items:center;gap:8px}
+.demo span{flex:1;line-height:1.35}.demo small{display:block;font-weight:600}
+.demo button{min-height:40px;border-radius:10px;border:0;background:#3D2E00;color:#fff;font:800 13px "Noto Sans KR",sans-serif;padding:0 12px;cursor:pointer}
+.top{top:0}
+</style>
+</head>
+<body>
+<div class="demo"><span>🧪 체험 화면 · 실제 기록에 안 남아요<small>예시 메이드로 키 서명을 눌러 보세요</small></span><button onclick="window.__demoReset && window.__demoReset()">처음부터</button></div>
+<header class="top">
+  <div class="top-row"><h1>룸메이드 정비 레포트</h1><span class="date" id="date">불러오는 중</span></div>
+  <div id="bar"></div>
+  <div class="sync" id="sync"></div>
+</header>
+<main id="main"><div class="notice"><strong>체험 화면을 여는 중이에요.</strong></div></main>
+<div id="sheet"></div>
+<script type="module" src="../app/app.js?v=2026.11.19-3"></script>
+</body>
+</html>
