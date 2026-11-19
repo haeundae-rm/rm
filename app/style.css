@@ -583,7 +583,10 @@ html.inhub main{padding-top:12px}
 .kchip.ret{background:var(--surface);color:var(--navy);border:2px solid var(--navy)}
 .kchip.ret.on{background:var(--done);border-color:var(--done);color:#fff}
 /* 반납 블라인드 · 지난번 반납 안내 (2026-11-19) */
+#main,.top{transition:filter 1.6s ease}
 body.gated #main,body.gated .top{filter:blur(5px);pointer-events:none;user-select:none}
+.keygate{animation:kgIn 1.4s ease both}.keygate .kg{animation:kgPop .6s .9s cubic-bezier(.25,1.3,.45,1) both}
+@keyframes kgIn{from{opacity:0}to{opacity:1}}@keyframes kgPop{from{opacity:0;transform:translateY(16px) scale(.96)}to{opacity:1;transform:none}}
 .keygate{position:fixed;inset:0;z-index:36;display:flex;align-items:center;justify-content:center;padding:20px;background:rgba(243,245,248,.55)}
 .keygate .kg{width:100%;max-width:360px;background:var(--surface);border-radius:24px;padding:24px 20px 16px;box-shadow:0 20px 50px rgba(17,24,39,.25);display:flex;flex-direction:column;align-items:center;gap:10px;text-align:center}
 .keygate .kgi{font-size:44px;line-height:1}

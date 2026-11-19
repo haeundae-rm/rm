@@ -6,7 +6,7 @@ import { makeLeaveApi } from './leave_my.js';
 import { setupVoc } from './voc.js';
 import * as K from './keys.js';   // 🔑 플로어키 서명 (2026-11-19)
 
-const APP_VER = '2026.11.19-8';
+const APP_VER = '2026.11.19-9';
 // 관리자 = 보안 규칙 isAdmin 과 같은 목록 (UID 는 공개돼도 되는 값)
 const ADMINS = [
   { uid: 'iw2orXgIgPgTbLUQa0b41XJ9Dvd2', label: '소장', email: 'unieshaeundae+admin@gmail.com' },
@@ -1246,7 +1246,7 @@ function retLines() {
   if (lost.trim()) out.push(lost);
   return out;
 }
-// ---------- 반납 블라인드 (2026-11-19 사용자 안): 마지막 객실 완료 10초 뒤, 받은 키가 있으면 레포트를 흐리게 가리고 [키 반납했어요]를 크게
+// ---------- 반납 블라인드 (2026-11-19 사용자 안): 마지막 객실 완료 → 정비 끝 카드 뒤 약 5초에 점점 흐려지며, 받은 키가 있으면 레포트를 흐리게 가리고 [키 반납했어요]를 크게
 // [아직 일이 남았어요] = 30분 동안 걷음 (앱을 다시 열면 다시 뜸). 객실이 새로 생기면(남은 객실 > 0) 저절로 사라짐
 let gatePeek = 0, gateT = 0;
 function keyNotRet() { const R = K.latestRet(keyRet); return keyGot().filter(d => !R[d.maid + '|' + d.floor]); }
@@ -1256,7 +1256,7 @@ function keyGate(allDone) {
   const k = 'rm_alldone_' + today + '|' + me;
   if (!need) { if (el) el.remove(); document.body.classList.remove('gated'); return; }
   let since = Number(lsGet(k) || 0); if (!since) { since = Date.now(); lsSet(k, String(since)); }
-  const wait = since + 10000 - Date.now();
+  const wait = since + 5500 - Date.now();   // '오늘 정비 끝' 카드(5초)가 닫힐 즈음 점점 흐려지며 뜸
   if (wait > 0) { clearTimeout(gateT); gateT = setTimeout(update, wait + 100); }
   const show = wait <= 0 && gatePeek < Date.now() && !(dlg && dlg.kind !== 'keyret');
   if (!show) { if (el) el.remove(); document.body.classList.remove('gated'); return; }
