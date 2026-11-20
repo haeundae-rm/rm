@@ -54,6 +54,24 @@ export function parseVoc(text, today) {
     return { date, kind: it.kind, cat: it.cat, text: body, raw: t, room: rm ? rm[1] : '', ci, co, resp: respOf(body, it.cat, it.kind), types: typesOf(body) };
   });
 }
+// 중복 막기 (2026-11-20): 같은 건 = 객실·입실일·내용이 같음 (호수 없으면 공유일·분류·내용). 띄어쓰기·문장부호는 무시
+export function vocKey(x) {
+  const t = String(x.text || '').replace(/[\s.,!?~·…'"“”‘’()\[\]-]/g, '').toLowerCase();
+  return x.room ? 'r|' + x.room + '|' + (x.ci || '') + '|' + t : 'd|' + (x.date || '') + '|' + (x.cat || '') + '|' + t;
+}
+// 같은 건은 늘 같은 문서 이름 → 휴대폰·PC 에서 동시에 저장해도 한 건만 남음
+export function vocId(x) {
+  const k = vocKey(x); let a = 0x811c9dc5, b = 0x9747b28c;
+  for (let i = 0; i < k.length; i++) { const c = k.charCodeAt(i); a = Math.imul(a ^ c, 0x01000193) >>> 0; b = Math.imul(b ^ c, 0x5bd1e995) >>> 0; }
+  return 'k' + a.toString(36) + b.toString(36);
+}
+// 나눈 건마다 이미 저장됐는지 표시: x.dup = '저장됨'(이미 저장) | '글안'(붙여넣은 글 안에서 두 번) | ''
+export function markDups(items, saved) {
+  const have = {}; (saved || []).forEach(d => { have[vocKey(d)] = 1; });
+  const seen = {};
+  items.forEach(x => { const k = vocKey(x); x.dup = have[k] ? '저장됨' : seen[k] ? '글안' : ''; seen[k] = 1; });
+  return items;
+}
 function addDays(d, n) { const x = new Date(d + 'T12:00:00+09:00'); x.setTime(x.getTime() + n * 864e5); return new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Seoul', year: 'numeric', month: '2-digit', day: '2-digit' }).format(x); }
 // 마지막 정비자: 입실일부터 7일 거슬러 '완료' 기록 → 없으면 입실일 배정
 export async function findCleaner(S, room, ci) {
@@ -87,12 +105,15 @@ export function setupVoc(ctx) {
   const md = d => (d ? Number(d.slice(5, 7)) + '/' + Number(d.slice(8, 10)) : '');
   const chip = (on, label, attrs) => '<button class="vchip' + (on ? ' on' : '') + '" ' + attrs + '>' + esc(label) + '</button>';
   function itemCard(x, i, isDraft) {
-    const c = x.cleaner, maidRow = x.resp.indexOf('정비') >= 0 && x.room
+    const c = x.cleaner || (isDraft ? null : { maid: x.maid || '', day: x.maidDay || '', at: x.maidAt || 0, how: x.maidHow || '기록 없음', more: [] }), maidRow = x.resp.indexOf('정비') >= 0 && x.room
       ? '<div class="vwho">' + (c ? (c.maid ? '마지막 정비자 <b>' + esc(c.maid) + '</b> · ' + esc(md(c.day)) + (c.at ? ' ' + hm(c.at) : '') + ' · <small>' + esc(c.how) + (c.more && c.more.length ? ' · 같은 날 ' + esc(c.more.join(', ')) : '') + '</small>' : '<span class="vwarn">정비자를 찾지 못했어요 (' + esc(c.how) + ')</span>') : '찾는 중…') + '</div>' : '';
     const key = isDraft ? 'data-di="' + i + '"' : 'data-vid="' + esc(x.id) + '"';
-    return '<div class="vitem ' + (x.kind === '칭찬' ? 'good' : 'bad') + '"><div class="vtop"><span class="vk">' + esc(x.kind) + '</span>' + (x.cat ? '<span class="vcat">' + esc(x.cat) + '</span>' : '') +
+    const skip = isDraft && x.dup && !x.force, twin = !isDraft && dupCount[vocKey(x)] > 1;
+    const dupRow = isDraft && x.dup ? '<div class="vdup">' + (x.dup === '저장됨' ? '이미 저장된 건이에요' : '붙여넣은 글 안에 같은 건이 또 있어요') + ' — ' + (x.force ? '<b>그래도 저장해요</b>' : '저장에서 빠져요') +
+      ' <button ' + key + ' data-vforce="1">' + (x.force ? '빼기' : '그래도 저장') + '</button></div>' : twin ? '<div class="vdup">같은 건이 ' + dupCount[vocKey(x)] + '번 저장돼 있어요. 하나만 남기고 지워 주세요.</div>' : '';
+    return '<div class="vitem ' + (x.kind === '칭찬' ? 'good' : 'bad') + (skip ? ' vskip' : '') + '"><div class="vtop"><span class="vk">' + esc(x.kind) + '</span>' + (x.cat ? '<span class="vcat">' + esc(x.cat) + '</span>' : '') +
       (x.room ? '<b class="vroom">' + esc(x.room) + '호</b>' : '<span class="vcat">호수 없음</span>') + (x.ci ? '<span class="vcat">' + md(x.ci) + (x.co ? '~' + md(x.co) : '') + ' 투숙</span>' : '') +
-      (isDraft ? '' : '<span class="vdate">' + md(x.date) + ' 공유' + (trial(x.date) ? ' · 시범' : '') + '</span>') + '</div>' +
+      (isDraft ? '' : '<span class="vdate">' + md(x.date) + ' 공유' + (trial(x.date) ? ' · 시범' : '') + '</span>') + (skip ? '<span class="vdupb">이미 저장됨</span>' : '') + '</div>' + dupRow +
       '<p class="vtext">' + esc(x.text) + '</p>' +
       '<div class="vresp">' + RESP.map(r => chip(x.resp.indexOf(r) >= 0, r, key + ' data-resp="' + r + '"')).join('') + (x.types && x.types.length ? '<span class="vtypes">' + esc(x.types.join(' · ')) + '</span>' : '') + '</div>' + maidRow +
       (isDraft ? '' : '<div class="vacts">' + (x.resp.indexOf('정비') >= 0 && x.room ? '<button ' + key + ' data-vmaid="1">정비자 고치기</button>' : '') + '<button ' + key + ' data-vdel="1" class="dangerl">' + (view.del === x.id ? '한 번 더 누르면 지워져요' : '지우기') + '</button></div>') + '</div>';
@@ -110,8 +131,12 @@ export function setupVoc(ctx) {
     });
     return { maid, room, type, good, bad, goodAll };
   }
+  let dupCount = {};
+  const toSave = () => (draft && draft.items ? draft.items.filter(x => !x.dup || x.force) : []);
   function html() {
     start();
+    dupCount = {}; (docs || []).forEach(d => { const k = vocKey(d); dupCount[k] = (dupCount[k] || 0) + 1; });
+    if (draft && draft.items) markDups(draft.items, docs);   // 다른 기기에서 막 저장한 것도 바로 반영 (구독 중)
     if (docs === null) return '<div class="card"><h3>고객만족도 VOC</h3><p class="rec vwarn">VOC 자료를 읽지 못했어요. Firebase 보안 규칙 v7 이 게시됐는지 확인해 주세요.</p></div>';
     let h = '<div class="card"><h3>VOC 넣기</h3><p class="rec" style="margin:0 0 8px">카톡으로 받은 고객만족도 공유 글을 그대로 붙여넣고 <b>나누기</b>를 누르세요. 확인 후 저장한 건만 실적에 들어가요.' + (trial(ctx.today()) ? ' <b>2026년은 시범 기간</b> — 2027년 1월부터 공식 누계예요.' : '') + '</p>' +
       '<textarea id="voctxt" rows="6" class="vtxt" placeholder="예) 11/4 고객만족도 특이건 공유드립니다&#10;[개선 건]&#10;✔️객실&#10;-욕실 청소 미흡 (1407호, 11/3~4)">' + esc(draft ? draft.txt : '') + '</textarea>' +
@@ -119,8 +144,12 @@ export function setupVoc(ctx) {
     if (draft && draft.items) {
       h += '<p class="sec" style="margin:12px 0 6px">' + md(draft.items[0] ? draft.items[0].date : '') + ' 공유 · ' + draft.items.length + '건 — 분류를 확인하고 저장하세요</p>' +
         (draft.items.length ? draft.items.map((x, i) => itemCard(x, i, true)).join('') : '<p class="rec vwarn">건을 찾지 못했어요. 글 모양을 확인해 주세요.</p>') +
-        (draft.dup ? '<p class="rec vwarn">이 날짜에 이미 저장된 건이 ' + draft.dup + '건 있어요. 같은 글을 두 번 넣지 않았는지 확인해 주세요.</p>' : '') +
-        '<div class="acts"><button data-vcancel="1">취소</button><button class="go" data-vsave="1"' + (busy || !draft.items.length || draft.items.some(x => x.room && x.resp.indexOf('정비') >= 0 && !x.cleaner) ? ' disabled' : '') + '>' + (busy ? '저장 중…' : draft.items.length + '건 저장') + '</button></div>';
+        (function () {
+          const ns = toSave().length, nd = draft.items.length - ns;
+          return (draft.items.length && !ns ? '<p class="rec vwarn">이 글은 이미 다 저장돼 있어요. 다시 저장하지 않아도 돼요.</p>' : nd ? '<p class="rec vwarn">이미 저장된 ' + nd + '건은 빼고 새 ' + ns + '건만 저장해요.</p>' : '') +
+            '<div class="acts"><button data-vcancel="1">취소</button><button class="go" data-vsave="1"' + (busy || !ns || toSave().some(x => x.room && x.resp.indexOf('정비') >= 0 && !x.cleaner) ? ' disabled' : '') + '>' +
+            (busy ? '저장 중…' : !ns ? '모두 이미 저장됨' : '새 ' + ns + '건 저장' + (nd ? ' (중복 ' + nd + '건 제외)' : '')) + '</button></div>';
+        })();
     }
     h += '</div>';
     const all = docs || [], ym = view.ym || ctx.today().slice(0, 7), y = view.year || year0();
@@ -152,19 +181,22 @@ export function setupVoc(ctx) {
   function parse() {
     const t = (document.getElementById('voctxt') || {}).value || '';
     const items = parseVoc(t, ctx.today());
-    const dup = items.length ? (docs || []).filter(x => x.date === items[0].date).length : 0;
-    draft = { txt: t, items, dup }; ctx.render();
+    markDups(items, docs);
+    draft = { txt: t, items }; ctx.render();
     match(items).then(() => ctx.render());
   }
   function save() {
     if (!draft || busy) return;
+    markDups(draft.items, docs);
+    const list = toSave(); if (!list.length) { ctx.render(); return; }
     busy = true; ctx.render();
-    const jobs = draft.items.map(x => {
+    const jobs = list.map(x => {
       const c = x.cleaner || {}, maid = x.resp.indexOf('정비') >= 0 ? c.maid || '' : '';
-      return S.add('voc', { date: x.date, kind: x.kind, cat: x.cat, text: x.text, raw: x.raw, room: x.room, ci: x.ci, co: x.co, resp: x.resp, types: x.types,
-        maid, maidDay: maid ? c.day || '' : '', maidAt: maid ? c.at || 0 : 0, maidHow: maid ? c.how || '' : '', trial: trial(x.date), by: ctx.who(), at: S.SERVER_TIME }).done;
+      const data = { date: x.date, kind: x.kind, cat: x.cat, text: x.text, raw: x.raw, room: x.room, ci: x.ci, co: x.co, resp: x.resp, types: x.types,
+        maid, maidDay: maid ? c.day || '' : '', maidAt: maid ? c.at || 0 : 0, maidHow: maid ? c.how || '' : '', trial: trial(x.date), by: ctx.who(), at: S.SERVER_TIME };
+      return x.force ? S.add('voc', data).done : S.set('voc/' + vocId(x), data);   // '그래도 저장'은 새 이름으로 (같은 이름이면 덮어써짐)
     });
-    Promise.all(jobs).then(() => { busy = false; const n = draft.items.length; draft = null; say('VOC ' + n + '건을 저장했어요.'); ctx.render(); })
+    Promise.all(jobs).then(() => { busy = false; const n = list.length; draft = null; say('VOC ' + n + '건을 저장했어요.'); ctx.render(); })
       .catch(e => { busy = false; say('저장하지 못했어요: ' + (e && e.message || e)); ctx.render(); });
   }
   function shiftYm(ym, n) { let y = Number(ym.slice(0, 4)), m = Number(ym.slice(5)) + n; while (m < 1) { m += 12; y--; } while (m > 12) { m -= 12; y++; } return y + '-' + ('0' + m).slice(-2); }
@@ -191,7 +223,7 @@ export function setupVoc(ctx) {
   }
   document.addEventListener('click', e => {
     if (!ctx.isAdm()) return;
-    const b = e.target.closest && e.target.closest('[data-vparse],[data-vsave],[data-vcancel],[data-vtab],[data-vm],[data-vy],[data-vcsv],[data-resp],[data-vdel],[data-vmaid]');
+    const b = e.target.closest && e.target.closest('[data-vparse],[data-vsave],[data-vforce],[data-vcancel],[data-vtab],[data-vm],[data-vy],[data-vcsv],[data-resp],[data-vdel],[data-vmaid]');
     if (!b) return;
     if (b.hasAttribute('data-vparse')) { parse(); return; }
     if (b.hasAttribute('data-vsave')) { save(); return; }
@@ -201,6 +233,7 @@ export function setupVoc(ctx) {
     if (b.hasAttribute('data-vy')) { view.year = String(Number(view.year || year0()) + Number(b.getAttribute('data-vy'))); ctx.render(); return; }
     if (b.hasAttribute('data-vcsv')) { csv(); return; }
     const di = b.getAttribute('data-di'), vid = b.getAttribute('data-vid');
+    if (b.hasAttribute('data-vforce') && di !== null && draft) { const x = draft.items[Number(di)]; x.force = !x.force; ctx.render(); return; }
     if (b.hasAttribute('data-resp')) {
       const r = b.getAttribute('data-resp');
       if (di !== null && draft) { const x = draft.items[Number(di)]; if (x.resp.indexOf(r) >= 0) { if (x.resp.length > 1) x.resp = x.resp.filter(z => z !== r); } else x.resp.push(r); ctx.render(); }

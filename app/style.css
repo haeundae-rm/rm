@@ -523,6 +523,10 @@ body.adm main>.alert{background:var(--red-soft);color:var(--warn-red)}
 .vwho{margin-top:8px;font-size:14px;padding:8px 10px;border-radius:10px;background:color-mix(in srgb,var(--navy) 6%,var(--surface))}
 .vwho small{color:var(--muted)}
 .vwarn{color:var(--warn-red);font-weight:700}
+.vitem.vskip{opacity:.55}
+.vdupb{background:#6b7280;color:#fff;border-radius:999px;padding:2px 8px;font-size:12px;font-weight:700}
+.vdup{margin:6px 0 0;font-size:13px;color:#8a5a00;background:#fff6e0;border-radius:8px;padding:6px 8px}
+.vdup button{margin-left:6px;font-size:12px;padding:3px 8px}
 .vacts{display:flex;gap:8px;justify-content:flex-end;margin-top:8px}
 .vacts button{border:1px solid var(--line);background:var(--surface);color:var(--ink);border-radius:99px;padding:5px 12px;font:700 13px var(--f-body);cursor:pointer}
 .vacts button.dangerl{color:var(--warn-red)}
