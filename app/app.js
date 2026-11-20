@@ -1218,6 +1218,14 @@ function keyOthers(f, lat) {
   const mine = keyMine();
   return ['A', 'B'].map(k => { const n = K.takenBy(lat, f, k, mine); return n.length ? k + '키 ' + n.join('·') + ' 님' : ''; }).filter(x => x).join(' / ');
 }
+// 11/20 사용자: 이미 다른 분이 가져간 키는 버튼 안에 이름 (보관함에서 빈 고리 찾는 일 줄이기). 누를 수는 있음 (짝과 같이 쓰는 경우)
+function keyBtn(f, k, lat, big) {
+  const n = K.takenBy(lat, f, k, keyMine()), lb = k + '키' + (big ? ' 가져감' : '');
+  return n.length ? '<button class="ktaken" data-key="' + f + ':' + k + '">' + k + '키<small>' + esc(n.join('·')) + ' 님이 가져감</small></button>' : '<button data-key="' + f + ':' + k + '">' + lb + '</button>';
+}
+function keyBoth(f, lat) {
+  const m = keyMine(); return K.takenBy(lat, f, 'A', m).length && K.takenBy(lat, f, 'B', m).length ? '<small class="kboth">A·B키 모두 나갔어요 · 가져간 분께 받으세요</small>' : '';
+}
 function keyTime(a) { return hm(a.clientAt || a.at); }
 function keyBand(m, allDone) {   // 레포트가 주인공 → 키는 작게: 다 알리면 한 줄, 안 알린 층만 버튼 줄
   if (!keyOn()) return '';
@@ -1232,8 +1240,8 @@ function keyBand(m, allDone) {   // 레포트가 주인공 → 키는 작게: �
     return '<button class="kchip' + (a.key === '없음' ? ' no' : '') + '" data-keychg="' + f + '" aria-label="' + f + '층 키 바꾸기">' + f + '층 ' + esc(K.KEY_LABEL[a.key] || a.key) + '</button>'; }).join('');
   if (!miss.length) return '<section class="keyband done"><span class="kic">🔑</span><span class="kchips">' + chips + '</span>' + view + '</section>';
   const rows = miss.map(f => { const oth = keyOthers(f, lat);
-    return '<div class="krow"><b class="kf">' + f + '층</b><span class="kbtns"><button data-key="' + f + ':A">A키</button><button data-key="' + f + ':B">B키</button><button class="kno" data-keynone="' + f + '">안 가져가요</button></span>' +
-      (oth ? '<small class="koth">이미 가져감 · ' + esc(oth) + '</small>' : '') + '</div>'; }).join('');
+    return '<div class="krow"><b class="kf">' + f + '층</b><span class="kbtns">' + keyBtn(f, 'A', lat) + keyBtn(f, 'B', lat) + '<button class="kno" data-keynone="' + f + '">안 가져가요</button></span>' +
+      keyBoth(f, lat) + '</div>'; }).join('');
   return '<section class="keyband need"><div class="kh"><b>🔑 키 가져가셨나요?</b><small>눌러야 그 층 객실 완료돼요</small>' + view + '</div>' + rows +
     (chips ? '<div class="kchips">' + chips + '</div>' : '') + '</section>';
 }
@@ -1377,8 +1385,8 @@ function keyDlgBody() {
     if (keyAns(d.floor, lat)) return '';
     const oth = keyOthers(d.floor, lat);
     return '<h3>🔑 ' + d.floor + '층 키를 먼저 알려 주세요</h3><p>' + esc(d.room) + '호를 완료하기 전에, 오늘 ' + d.floor + '층 키를 가져가셨는지 눌러 주세요.</p>' +
-      (oth ? '<p class="koth">이미 가져감 · ' + esc(oth) + '</p>' : '') +
-      '<div class="kbig"><button data-key="' + d.floor + ':A">A키 가져감</button><button data-key="' + d.floor + ':B">B키 가져감</button><button class="kno" data-keynone="' + d.floor + '">안 가져가요</button></div>' +
+      keyBoth(d.floor, lat) +
+      '<div class="kbig">' + keyBtn(d.floor, 'A', lat, 1) + keyBtn(d.floor, 'B', lat, 1) + '<button class="kno" data-keynone="' + d.floor + '">안 가져가요</button></div>' +
       '<div class="acts"><button data-x="1">닫기</button></div>';
   }
   if (k === 'keynone') return '<h3>' + d.floors.map(f => f + '층').join(' · ') + ' 키를 안 가져가셨나요?</h3><p>이유를 골라 주세요.</p>' + keyReasonHtml(d) +
