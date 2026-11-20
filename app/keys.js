@@ -91,6 +91,12 @@ export function ledger(lat, chkDocs, retDocs) {
 }
 // 오늘 배정(plans) + 근무 중 변경(changes) → 메이드마다 층 목록. 허브용 (정비 레포트 관리자 화면 셈을 줄인 것)
 export function maidFloors(plans, changes) {
+  const R = maidRooms(plans, changes);
+  const out = {}; Object.keys(R).forEach(n => { const f = floorsOfRooms(R[n]); if (f.length) out[n] = f; });
+  return out;
+}
+// 오늘 배정 + 변경 → 메이드마다 객실 목록 (문자열)
+export function maidRooms(plans, changes) {
   const R = {};
   Object.keys(plans || {}).forEach(n => { R[n] = (plans[n] || []).map(x => String(x.room)); });
   (changes || []).map(c => c.data || c).sort((a, b) => tOf(a) - tOf(b)).forEach(c => {
@@ -100,7 +106,15 @@ export function maidFloors(plans, changes) {
     else if (c.kind === '제외') rm(c.maid, String(c.room));
     else if (c.kind === '교환' && c.to) { rm(c.maid, String(c.room)); rm(c.to, String(c.toRoom)); ad(c.maid, String(c.toRoom)); ad(c.to, String(c.room)); }
   });
-  const out = {}; Object.keys(R).forEach(n => { const f = floorsOfRooms(R[n]); if (f.length) out[n] = f; });
+  return R;
+}
+// 11/20: 그 층을 시작했나 = 그 메이드(또는 짝) 객실 중 그 층에 기록(recs)이 하나라도 있음
+//   시작 전 층은 '대기'(앱이 그 층 첫 객실을 누를 때 키를 물음) → 미서명 알림에서 뺌
+export function startedFloors(mr, recs, mate) {
+  const has = {}; (recs || []).forEach(x => { const d = x.data || x; if (d && d.room && d.status) has[String(d.room)] = 1; });
+  const out = {};
+  Object.keys(mr || {}).forEach(n => { const mt = (mate && mate[n]) || '', rooms = (mr[n] || []).concat(mt && mr[mt] ? mr[mt] : []);
+    out[n] = floorsOfRooms(rooms.filter(r => has[String(r)])); });
   return out;
 }
 // 아직 키 답을 안 한 사람 · 층 (2인 1조는 짝이 답했으면 답한 것)
@@ -114,12 +128,19 @@ export function unanswered(mf, lat, mate) {
   return out;
 }
 // 허브 첫 화면 · 키 대장 요약
+//   o.mr + o.recs 를 주면: 시작한 층만 '미서명'(unanswered), 아직 시작 전 층은 waiting 으로 따로
 export function summary(o) {
   const lat = latest(o.keys), L = ledger(lat, o.chk, o.ret);
-  const un = o.mf ? unanswered(o.mf, lat, o.mate) : [];
+  const all = o.mf ? unanswered(o.mf, lat, o.mate) : [];
+  let un = all, waiting = [];
+  if (o.mr && Array.isArray(o.recs)) {
+    const sf = startedFloors(o.mr, o.recs, o.mate); un = []; 
+    all.forEach(u => { const s = sf[u.name] || [], a = u.floors.filter(f => s.indexOf(f) >= 0), b = u.floors.filter(f => s.indexOf(f) < 0);
+      if (a.length) un.push({ name: u.name, floors: a }); if (b.length) waiting.push({ name: u.name, floors: b }); });
+  }
   const cells = []; L.forEach(r => ['A', 'B'].forEach(k => cells.push(Object.assign({ floor: r.floor, key: k }, r[k]))));
   const late = cells.filter(c => c.st === 'late'), nosign = cells.filter(c => c.st === 'nosign');
   const checked = cells.filter(c => c.chk && c.chk.st).length;
   const changed = Object.keys(lat).map(k => lat[k]).filter(d => d.n > 1 || d.by === '관리자');
-  return { lat, ledger: L, unanswered: un, late, nosign, checked, cells: cells.length, changed };
+  return { lat, ledger: L, unanswered: un, waiting, late, nosign, checked, cells: cells.length, changed };
 }
