@@ -92,17 +92,24 @@ function idb() { return new Promise((res, rej) => { const r = indexedDB.open('rm
 async function kvGet(k) { try { const db = await idb(); return await new Promise(res => { const q = db.transaction('kv').objectStore('kv').get(k); q.onsuccess = () => res(q.result || null); q.onerror = () => res(null); }); } catch (e) { return null; } }
 async function kvSet(k, v) { try { const db = await idb(); await new Promise(res => { const t = db.transaction('kv', 'readwrite'); if (v === null) t.objectStore('kv').delete(k); else t.objectStore('kv').put(v, k); t.oncomplete = res; t.onerror = res; }); } catch (e) {} }
 
-// 폴더 안에서 오늘 파일: 이름에 'M월 D일' 이 있는 엑셀 중 가장 최근 저장 → 없으면 가장 최근 엑셀 (~$ 잠금 파일 뺌)
+// 폴더 안에서 오늘 파일 (11/22: 하위 폴더도 봄 — '26년 정비보고서' 를 고르면 '11월 정비보고서' · '12월 정비보고서' 안까지, 달마다 다시 안 골라도 됨)
+//   이름에 'M월 D일' 이 있는 엑셀 중 가장 최근 저장. 다른 날짜가 적힌 파일은 쓰지 않음 (어제 파일을 오늘로 읽지 않게). ~$ 잠금 파일 뺌
 export async function pickFile(dir, day) {
   const M = Number(day.slice(5, 7)), D = Number(day.slice(8, 10));
-  const re = new RegExp('(^|\\D)0?' + M + '\\s*월\\s*0?' + D + '\\s*일');
+  const re = new RegExp('(^|\\D)0?' + M + '\\s*월\\s*0?' + D + '\\s*일'), dated = /\d{1,2}\s*월\s*\d{1,2}\s*일/;
   let best = null, any = null;
-  for await (const [name, h] of dir.entries()) {
-    if (h.kind !== 'file' || !/\.xlsx$/i.test(name) || /^~\$/.test(name)) continue;
-    const f = await h.getFile(), c = { name, f };
-    if (re.test(name) && (!best || f.lastModified > best.f.lastModified)) best = c;
-    if (!any || f.lastModified > any.f.lastModified) any = c;
+  async function walk(d, depth) {
+    for await (const [name, h] of d.entries()) {
+      if (h.kind === 'directory') { if (depth < 2 && !/^[.~$]/.test(name)) await walk(h, depth + 1); continue; }
+      if (h.kind !== 'file' || !/\.xlsx$/i.test(name) || /^~\$/.test(name)) continue;
+      const today = re.test(name);
+      if (!today && dated.test(name)) continue;
+      const f = await h.getFile(), c = { name, f };
+      if (today && (!best || f.lastModified > best.f.lastModified)) best = c;
+      if (!today && (!any || f.lastModified > any.f.lastModified)) any = c;
+    }
   }
+  await walk(dir, 0);
   return best || any;
 }
 
@@ -172,7 +179,7 @@ export function setupSync(ctx) {
     checkedAt = Date.now();
     try {
       const c = await pickFile(dir, day);
-      if (!c) { stage = 'stop'; msg = '폴더에 정비보고서 엑셀이 없어요'; draw(); heartbeat(); return; }
+      if (!c) { stage = 'wait'; msg = '폴더에 오늘(' + Number(day.slice(5, 7)) + '월 ' + Number(day.slice(8, 10)) + '일) 정비보고서 엑셀이 아직 없어요'; draw(); heartbeat(); return; }
       const changed = !f0 || f0.name !== c.name || f0.mt !== c.f.lastModified || f0.size !== c.f.size;
       if (changed) {
         const r = await readRows(await c.f.arrayBuffer());
@@ -322,7 +329,7 @@ export function setupSync(ctx) {
   function html() {
     let h = '<div class="card rscard"><h3>📄 정비보고서 연결 <small style="font-weight:400;color:var(--muted)">엑셀 → 앱 자동 반영</small></h3>';
     if (!can) h += '<p class="rec">이 브라우저는 폴더 연결을 못 해요. <b>오더테이커 PC의 크롬(또는 엣지)</b>에서 이 화면을 열어 주세요. 아래 시험(파일 넣어 보기)은 여기서도 돼요.</p>';
-    else if (!dir) h += '<p class="rec" style="margin:0 0 8px">정비보고서가 저장되는 <b>바탕화면 폴더</b>를 한 번 골라 주세요. 그 뒤로는 1분마다 파일을 보고, 바뀐 방(추가·빠짐·재실·시간)만 메이드 화면과 정비보조 더티에 넣어요. 이 창은 켜 둬 주세요.</p>' +
+    else if (!dir) h += '<p class="rec" style="margin:0 0 8px">정비보고서가 저장되는 <b>바탕화면 폴더</b>를 한 번 골라 주세요 (예: <b>26년 정비보고서</b> — 안의 달별 폴더까지 봐요). 그 뒤로는 1분마다 파일을 보고, 바뀐 방(추가·빠짐·재실·시간)만 메이드 화면과 정비보조 더티에 넣어요. 이 창은 켜 둬 주세요.</p>' +
       '<button class="go upbtn" data-rs="dir">📁 정비보고서 폴더 고르기</button>';
     else {
       h += statusLine();
