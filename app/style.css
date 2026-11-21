@@ -143,11 +143,6 @@ main{padding:16px 16px 56px;max-width:760px;margin:0 auto;display:flex;flex-dire
 .vent .vt b{display:block;color:var(--t-room);font-size:16px}
 .vent button{border:0;background:var(--t-room);color:#fff;font:700 14px var(--f-body);border-radius:10px;padding:10px 14px;cursor:pointer;white-space:nowrap}
 /* 🍚 오늘 점심 (2026-11-21) */
-.lunch{display:flex;gap:12px;align-items:center;width:100%;text-align:left;background:#FFF8E8;border:1.5px solid #E2BE6A;border-radius:14px;padding:12px 14px;font-family:var(--f-body);color:var(--ink);cursor:pointer}
-.lunch .li{font-size:28px;line-height:1}
-.lunch .lt{flex:1;min-width:0;font-size:15.5px;line-height:1.5;word-break:keep-all}
-.lunch .lt b{display:block;color:#8A5A00;font-size:16px}
-.lunch .lm{font-size:12.5px;font-weight:700;color:#8A5A00;white-space:nowrap}
 .lunchl{list-style:none;margin:6px 0 10px;padding:0}
 .lunchl li{padding:8px 0;border-top:1px solid var(--line);font-size:17px}
 .lunchl li:first-child{border-top:0}

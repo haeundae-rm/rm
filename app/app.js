@@ -424,11 +424,11 @@ function render() {
     if (viewMaid && maidOf(viewMaid)) renderMaid(adminView(viewMaid), true); else { viewMaid = null; renderAdmin(); }
   } else if (!me) { $('#bar').innerHTML = ''; renderPicker(); }
   else if (data.noPlan) {
-    $('#bar').innerHTML = '<div class="mebar"><span class="mechip">' + esc(meLabel()) + ' 님</span>' + noticeBtn(me) + sndBtn() + '</div>';
-    $('#main').innerHTML = bands() + instHtml() + lunchHtml() + '<div class="notice"><strong>오늘 배정은 아직 준비 중이에요.</strong><br>' + esc(data.label) + ' 배정은 오전 8시 30분에 올라와요.<br>화면을 켜 두면 올라오는 대로 객실이 자동으로 나타나요.</div><button class="foot" data-admin-in="1">관리자 메뉴</button>';
+    $('#bar').innerHTML = '<div class="mebar"><span class="mechip">' + esc(meLabel()) + ' 님</span>' + noticeBtn(me) + lunchBtn() + sndBtn() + '</div>';
+    $('#main').innerHTML = bands() + instHtml() + '<div class="notice"><strong>오늘 배정은 아직 준비 중이에요.</strong><br>' + esc(data.label) + ' 배정은 오전 8시 30분에 올라와요.<br>화면을 켜 두면 올라오는 대로 객실이 자동으로 나타나요.</div><button class="foot" data-admin-in="1">관리자 메뉴</button>';
   } else {
     const m = data.maids[0] || null;
-    $('#bar').innerHTML = '<div class="mebar"><span class="mechip">' + esc(meLabel()) + ' 님</span>' + noticeBtn(me) + sndBtn() + '</div>';
+    $('#bar').innerHTML = '<div class="mebar"><span class="mechip">' + esc(meLabel()) + ' 님</span>' + noticeBtn(me) + lunchBtn() + sndBtn() + '</div>';
     if (m) renderMaid(m, false);
     else $('#main').innerHTML = bands() + '<div class="notice"><strong>오늘 ' + esc(meLabel()) + ' 님 배정 객실이 없어요.</strong><br>휴무이거나 배정이 아직 올라오지 않았어요.</div><button class="foot" data-admin-in="1">관리자 메뉴</button>';
   }
@@ -503,10 +503,8 @@ function ventHtml() { const t = nowHM(); if (t < VENT_FROM || t >= VENT_TO || ls
 const MEAL_TO = '14:00';
 function mealSplit(x) { const m = String(x || '').match(/^(.*?)\s*\((.*)\)\s*$/); return m && m[1] ? { n: m[1].trim(), o: m[2].trim() } : { n: String(x || '').trim(), o: '' }; }
 function lunchOf() { const d = meals && meals.days && meals.days[today]; return d && Array.isArray(d.l) && d.l.length ? d.l : null; }
-function lunchHtml() {
-  const L = lunchOf(); if (!L || nowHM() >= MEAL_TO) return '';
-  return '<button class="lunch" data-lunch="1"><span class="li">🍚</span><span class="lt"><b>오늘 점심</b><span>' + L.map(x => esc(mealSplit(x).n)).join(' · ') + '</span></span><span class="lm">원산지 ›</span></button>';
-}
+// 11/21 사용자: 자리 차지 → 카드 대신 위쪽 이름 옆 작은 버튼, 누르면 메뉴 창
+function lunchBtn() { return lunchOf() && nowHM() < MEAL_TO ? '<button class="tbtn" data-lunch="1">🍚 점심</button>' : ''; }
 function lunchDlg() {
   const L = lunchOf() || [];
   return '<h3>🍚 오늘 점심 <small style="font-weight:500;color:var(--muted)">' + esc(data.label || '') + '</small></h3><ul class="lunchl">' + L.map(x => { const y = mealSplit(x); return '<li><b>' + esc(y.n) + '</b>' + (y.o ? '<small>' + esc(y.o) + '</small>' : '') + '</li>'; }).join('') + '</ul>' +
@@ -522,7 +520,7 @@ function renderMaid(m, asAdmin) {
   if (!asAdmin) cheer(m, d, t, rem, bump, myPend, prev);
   const dueLeft = m.rooms.filter(x => x.due && !recOf(recWho(m, x), x.room)).sort((a, b) => (a.due < b.due ? -1 : 1));
   const dirtyLeft = m.rooms.filter(x => isDirty(x.room) && !recOf(recWho(m, x), x.room));
-  let html = asAdmin ? '' : bands() + keyPastHtml() + instHtml() + ventHtml() + swapBanner(m) + keyBand(m, allDone) + lunchHtml();
+  let html = asAdmin ? '' : bands() + keyPastHtml() + instHtml() + ventHtml() + swapBanner(m) + keyBand(m, allDone);
   if (!asAdmin) html += DR.band(m);
   html += asAdmin ? '<div class="amode"><button class="ghost back" data-back="1">← 전체 현황</button><span>' + (m.team && m.team.length > 1 ? esc(m.team.join('·')) + ' 조 화면 (조 휴대폰과 같음 · 객실을 누르면 배정받은 분 이름으로 대신 처리)' : esc(m.name) + ' 님 화면' + (m.mateOff ? ' · 2인 1조 (짝 ' + esc(m.mateOff) + ' 님 오늘 배정 없음)' : '') + ' (객실을 누르면 대신 처리)') + '</span></div>' : '';
   const tile = (cls, n, lbl, jump) => (jump ? '<button class="stat ' + cls + '" data-jump="' + esc(jump) + '">' : '<div class="stat ' + cls + '">') + '<b>' + n + '</b><span>' + lbl + '</span>' + (jump ? '</button>' : '</div>');
