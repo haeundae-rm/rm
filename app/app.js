@@ -6,7 +6,7 @@ import { makeLeaveApi } from './leave_my.js';
 import { setupVoc } from './voc.js';
 import * as K from './keys.js';   // 🔑 플로어키 서명 (2026-11-19)
 
-const APP_VER = '2026.11.21-1';
+const APP_VER = '2026.11.21-2';
 // 관리자 = 보안 규칙 isAdmin 과 같은 목록 (UID 는 공개돼도 되는 값)
 const ADMINS = [
   { uid: 'iw2orXgIgPgTbLUQa0b41XJ9Dvd2', label: '소장', email: 'unieshaeundae+admin@gmail.com' },
@@ -882,6 +882,8 @@ function change(kind, maid, room, extra, viaAdmin) {
   if (extra && extra.to) d.parties = [maid, extra.to];
   const r = S.add('days/' + today + '/changes', d);
   r.done.catch(e => { console.warn('변경 거절', e); say(room + '호 ' + kind + '이(가) 저장되지 않았어요. ' + errText(e)); });
+  // 2026-11-21: 정비 지원(더티) 앱에도 같은 변경을 남김 → 그 메이드 객실에 자동으로 붙고 빠짐, 유닛이 늘면 자동 배정 (규칙 v22, 거절돼도 레포트 기록은 그대로)
+  S.set('sup/' + today + '/rm/' + r.id, d).catch(e => console.warn('정비 지원 반영 거절 (규칙 v22 전?)', e));
   return r;
 }
 async function owners(room) { try { return await withTimeout(S.get('days/' + today + '/owners/' + room), 8000, '연결이 느려요. 잠시 후 다시 해 주세요.'); } catch (e) { if (/느려요/.test(e.message)) throw e; return null; } }
