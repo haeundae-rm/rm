@@ -143,7 +143,15 @@ main{padding:16px 16px 56px;max-width:760px;margin:0 auto;display:flex;flex-dire
 .vent .vt b{display:block;color:var(--t-room);font-size:16px}
 .vent button{border:0;background:var(--t-room);color:#fff;font:700 14px var(--f-body);border-radius:10px;padding:10px 14px;cursor:pointer;white-space:nowrap}
 /* 🍚 오늘 점심 (2026-11-21) */
-.lunchl{list-style:none;margin:6px 0 10px;padding:0}
+.lbox{border:1.5px solid var(--line);border-radius:14px;padding:12px 14px;margin:0 0 10px}
+.lbox.on{background:#FFF8E8;border:2px solid #C79A3B}
+.lbox h4{margin:0 0 4px;display:flex;align-items:center;gap:8px;font-size:16px;color:var(--muted)}
+.lbox.on h4{color:#8A5A00}
+.lbox h4 small{font-weight:500;font-size:13px;color:var(--muted)}
+.lbox h4 i{font-style:normal;font-size:12px;background:#C79A3B;color:#fff;border-radius:99px;padding:2px 9px;margin-left:auto}
+.lbox:not(.on) .lunchl li{font-size:15.5px;padding:5px 0}
+.lnone{margin:4px 0 0;color:var(--muted);font-size:14px}
+.lunchl{list-style:none;margin:2px 0 0;padding:0}
 .lunchl li{padding:8px 0;border-top:1px solid var(--line);font-size:17px}
 .lunchl li:first-child{border-top:0}
 .lunchl li small{display:block;font-size:13px;color:var(--muted)}

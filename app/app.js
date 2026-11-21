@@ -7,7 +7,7 @@ import { setupVoc } from './voc.js';
 import * as K from './keys.js';   // 🔑 플로어키 서명 (2026-11-19)
 import { setupDreq } from './dreq.js';   // 🔔 더티 요청 (2026-11-21)
 
-const APP_VER = '2026.11.21-5';
+const APP_VER = '2026.11.21-6';
 // 관리자 = 보안 규칙 isAdmin 과 같은 목록 (UID 는 공개돼도 되는 값)
 const ADMINS = [
   { uid: 'iw2orXgIgPgTbLUQa0b41XJ9Dvd2', label: '소장', email: 'unieshaeundae+admin@gmail.com' },
@@ -499,15 +499,21 @@ function roomCard(m, x, isTeam) {
 function ventKey() { return 'rm_vent_' + today; }
 const ventHidden = {};
 function ventHtml() { const t = nowHM(); if (t < VENT_FROM || t >= VENT_TO || lsGet(ventKey()) === '1' || ventHidden[ventKey()]) return ''; return '<div class="vent"><span class="vi">🪟</span><span class="vt"><b>12시 환기 알림제</b>점심 식사 맛있게 드시고, 드신 후 환기 부탁드립니다.</span><button data-vent="1">확인</button></div>'; }
-// 🍚 오늘 점심 (2026-11-21): 허브에서 올린 주간 식단표(meta/meals)의 오늘 중식 — 14시까지만, 누르면 원산지까지
-const MEAL_TO = '14:00';
+// 🍚 오늘 점심 (2026-11-21): 허브에서 올린 주간 식단표(meta/meals)의 오늘 중식 — 하루 종일 (11/21 사용자: 14시 제한 없앰), 누르면 원산지까지
 function mealSplit(x) { const m = String(x || '').match(/^(.*?)\s*\((.*)\)\s*$/); return m && m[1] ? { n: m[1].trim(), o: m[2].trim() } : { n: String(x || '').trim(), o: '' }; }
-function lunchOf() { const d = meals && meals.days && meals.days[today]; return d && Array.isArray(d.l) && d.l.length ? d.l : null; }
-// 11/21 사용자: 자리 차지 → 카드 대신 위쪽 이름 옆 작은 버튼, 누르면 메뉴 창
-function lunchBtn() { return lunchOf() && nowHM() < MEAL_TO ? '<button class="tbtn" data-lunch="1">🍚 점심 메뉴</button>' : ''; }
+function lunchOf(d) { const x = meals && meals.days && meals.days[d || today]; return x && Array.isArray(x.l) && x.l.length ? x.l : null; }
+// 11/21 사용자: 오늘 · 내일 점심을 같이 (오늘 = 금색 테두리)
+function nextDay(d) { const t = new Date(d + 'T12:00:00Z'); t.setUTCDate(t.getUTCDate() + 1); return t.toISOString().slice(0, 10); }
+const LDOW = ['일', '월', '화', '수', '목', '금', '토'];
+function lunchLab(d) { const t = new Date(d + 'T12:00:00Z'); return (t.getUTCMonth() + 1) + '/' + t.getUTCDate() + ' (' + LDOW[t.getUTCDay()] + ')'; }
+function lunchBtn() { return lunchOf(today) || lunchOf(nextDay(today)) ? '<button class="tbtn" data-lunch="1">🍚 점심 메뉴</button>' : ''; }
+function lunchBox(d, on) {
+  const L = lunchOf(d);
+  return '<div class="lbox' + (on ? ' on' : '') + '"><h4>' + (on ? '오늘 점심' : '내일 점심') + '<small>' + lunchLab(d) + '</small>' + (on ? '<i>오늘</i>' : '') + '</h4>' +
+    (L ? '<ul class="lunchl">' + L.map(x => { const y = mealSplit(x); return '<li><b>' + esc(y.n) + '</b>' + (y.o ? '<small>' + esc(y.o) + '</small>' : '') + '</li>'; }).join('') + '</ul>' : '<p class="lnone">아직 식단이 안 올라왔어요</p>') + '</div>';
+}
 function lunchDlg() {
-  const L = lunchOf() || [];
-  return '<h3>🍚 오늘 점심 <small style="font-weight:500;color:var(--muted)">' + esc(data.label || '') + '</small></h3><ul class="lunchl">' + L.map(x => { const y = mealSplit(x); return '<li><b>' + esc(y.n) + '</b>' + (y.o ? '<small>' + esc(y.o) + '</small>' : '') + '</li>'; }).join('') + '</ul>' +
+  return '<h3>🍚 점심 메뉴</h3>' + lunchBox(today, true) + lunchBox(nextDay(today), false) +
     ((meals.notes || []).length ? '<p class="hint" style="font-size:13px">' + meals.notes.map(esc).join('<br>') + '</p>' : '') + '<div class="acts"><button data-x="1">닫기</button></div>';
 }
 function renderMaid(m, asAdmin) {
