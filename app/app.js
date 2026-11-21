@@ -504,7 +504,7 @@ const MEAL_TO = '14:00';
 function mealSplit(x) { const m = String(x || '').match(/^(.*?)\s*\((.*)\)\s*$/); return m && m[1] ? { n: m[1].trim(), o: m[2].trim() } : { n: String(x || '').trim(), o: '' }; }
 function lunchOf() { const d = meals && meals.days && meals.days[today]; return d && Array.isArray(d.l) && d.l.length ? d.l : null; }
 // 11/21 사용자: 자리 차지 → 카드 대신 위쪽 이름 옆 작은 버튼, 누르면 메뉴 창
-function lunchBtn() { return lunchOf() && nowHM() < MEAL_TO ? '<button class="tbtn" data-lunch="1">🍚 점심</button>' : ''; }
+function lunchBtn() { return lunchOf() && nowHM() < MEAL_TO ? '<button class="tbtn" data-lunch="1">🍚 점심 메뉴</button>' : ''; }
 function lunchDlg() {
   const L = lunchOf() || [];
   return '<h3>🍚 오늘 점심 <small style="font-weight:500;color:var(--muted)">' + esc(data.label || '') + '</small></h3><ul class="lunchl">' + L.map(x => { const y = mealSplit(x); return '<li><b>' + esc(y.n) + '</b>' + (y.o ? '<small>' + esc(y.o) + '</small>' : '') + '</li>'; }).join('') + '</ul>' +
