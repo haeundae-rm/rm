@@ -6,8 +6,9 @@ import { makeLeaveApi } from './leave_my.js';
 import { setupVoc } from './voc.js';
 import * as K from './keys.js';   // 🔑 플로어키 서명 (2026-11-19)
 import { setupDreq } from './dreq.js';   // 🔔 더티 요청 (2026-11-21)
+import { setupSync } from './rsync.js';   // 📄 정비보고서 연결 (2026-11-21): 오더테이커 PC 엑셀 → 바뀐 방만 앱에
 
-const APP_VER = '2026.11.21-6';
+const APP_VER = '2026.11.21-7';
 // 관리자 = 보안 규칙 isAdmin 과 같은 목록 (UID 는 공개돼도 되는 값)
 const ADMINS = [
   { uid: 'iw2orXgIgPgTbLUQa0b41XJ9Dvd2', label: '소장', email: 'unieshaeundae+admin@gmail.com' },
@@ -41,6 +42,8 @@ const VENT_FROM = '12:00', VENT_TO = '13:30';
 // 주소에 ?hub= 가 없거나 창 안이 아니면 아무것도 안 함 (메이드 휴대폰 영향 없음)
 const HUB = (() => { const m = /[?&]hub=(today|assign|set)\b/.exec(location.search); return m && window.parent !== window ? m[1] : ''; })();
 if (HUB) document.documentElement.classList.add('inhub');
+// 📄 정비보고서 연결 창 (2026-11-21): 허브에서 새 탭 ?link=1 로 엶 → 관리자 '보고서 연결' 탭부터
+const LINK = /[?&]link\b/.test(location.search);
 let user = null, isAdm = false, me = null, devState = 'wait';   // devState: wait / none / ok
 let today = seoulDate(), dayDoc = undefined, dayCache = false, cacheSince = 0;
 let meals = null;
@@ -107,7 +110,7 @@ S.onUser(u => {
   if (!u) { S.signInAnon().catch(e => { $('#main').innerHTML = '<div class="notice"><strong>처음 연결하지 못했어요.</strong><br>인터넷을 켜고 앱을 다시 열어 주세요.<br><small>' + esc(errText(e)) + '</small></div>'; }); return; }
   start();
 });
-function stopAll() { subs.concat(meSubs).forEach(f => { try { f(); } catch (e) {} }); subs = []; meSubs = []; try { VOC.stop(); } catch (e) {} try { DR.stop(); } catch (e) {} }
+function stopAll() { subs.concat(meSubs).forEach(f => { try { f(); } catch (e) {} }); subs = []; meSubs = []; try { VOC.stop(); } catch (e) {} try { DR.stop(); } catch (e) {} try { RS.stop(); } catch (e) {} }
 function start() {
   stopAll();
   isAdm = ADMINS.some(a => isAdmUser(a, user));
@@ -142,6 +145,7 @@ function start() {
     subs.push(S.listenDoc('uploads/latest', d => { upDoc = d; update(); }, () => {}));   // 정비보고서 올림 상태 (⑦)
     subs.push(S.listenQuery('errors', [['day', '==', today]], docs => { errDocs = docs.map(x => x.data).sort((a, b) => (b.at || 0) - (a.at || 0)); update(); }, () => {}));
     loadPastAcksAdmin();
+    if (!HUB) RS.start(today);   // 📄 정비보고서 연결 (폴더를 골라 둔 PC에서만 파일을 읽음)
   } else {
     subs.push(S.listenDoc('devices/' + user.uid, (d, meta) => {
       if (meta.pending) return;   // 서버가 등록을 받은 뒤에 본인 자료를 읽음 (먼저 읽으면 규칙에 막힘)
@@ -752,13 +756,15 @@ function adminView(n) {
 }
 // 관리자 화면 = 메뉴(탭) 4개: 오늘 현황 · 배정 · VOC · 설정 (2026-11-07). 문제는 맨 위 빨간 띠로만
 let admTab = (() => { try { return localStorage.getItem('rm_admtab') || 'today'; } catch (e) { return 'today'; } })(), mgSort = 'order';
-const ADM_TABS = [['today', '오늘 현황'], ['assign', '배정'], ['voc', 'VOC'], ['staff', '명단'], ['set', '설정']];
+const ADM_TABS = [['today', '오늘 현황'], ['assign', '배정'], ['link', '보고서 연결'], ['voc', 'VOC'], ['staff', '명단'], ['set', '설정']];
+if (LINK) admTab = 'link';
 const admTabs = () => ADM_TABS.filter(t => !(t[0] === 'staff' && isHk()));
 function admAlerts() {
   const out = [];
   if (data.noPlan) out.push('<button class="aal" data-atab="assign">⚠ 오늘 배정이 아직 앱에 없어요 · <b>배정 → 정비보고서 올리기</b></button>');
   if (!relay || !relay.at || !relay.ok || Date.now() - relay.at > 12 * 60000) out.push('<button class="aal" data-atab="assign">⚠ ' + relayLine().replace(/<[^>]+>/g, '') + '</button>');
   if (cmp && cmp.day === today && !cmp.ok) out.push('<button class="aal" data-atab="assign">⚠ 오늘 대조 차이 ' + cmp.n + '건 · <b>배정</b>에서 보기</button>');
+  const rsa = RS.alert(); if (rsa && admTab !== 'link') out.push('<button class="aal" data-atab="link">' + esc(rsa) + '</button>');
   if (errDocs.length) out.push('<button class="aal" data-atab="set">📵 휴대폰 오류 오늘 ' + errDocs.length + '건 · <b>설정</b>에서 보기</button>');
   return out.length ? '<div class="aals">' + out.join('') + '</div>' : '';
 }
@@ -824,6 +830,8 @@ function renderAdmin() {
         return '<div class="r' + (dupN.length || selfRm ? ' hot' : '') + '"><span><b>' + esc(c.room) + '</b> · ' + what + (c.by === '관리자' ? ' (관리자)' : '') + (dupN.length ? '<br><small>겹침: ' + esc(dupN.join(', ')) + ' 님 배정</small>' : '') + (selfRm ? '<br><small>정비하는 사람이 없어요 · 필요하면 메이드 화면에서 다시 추가</small>' : '') + '</span><span>' + hm(c.at) + '</span></div>';
       }).join('') + '</div></div>';
     }
+  } else if (admTab === 'link') {
+    html += RS.html();
   } else if (admTab === 'voc') {
     html += vocHtml();
   } else if (admTab === 'staff') {
@@ -1162,6 +1170,7 @@ document.addEventListener('click', e => {
   if (at('[data-staffopen]') && isAdm) { openStaff(); return; }
   const atb = at('[data-atab]'); if (atb && isAdm) { admTab = atb.getAttribute('data-atab'); try { localStorage.setItem('rm_admtab', admTab); } catch (e) {} viewMaid = null; render(); window.scrollTo(0, 0); return; }
   const mgs = at('[data-mgsort]'); if (mgs && isAdm) { mgSort = mgs.getAttribute('data-mgsort'); render(); return; }
+  if (isAdm && RS.click(t)) return;
   if (at('[data-upload]')) { pickXlsx(); return; }
   if (at('[data-verify]')) { pickVerify(); return; }
   if (at('[data-release-all]')) { dlg = { kind: 'releaseall' }; drawDlg(); return; }
@@ -1525,6 +1534,13 @@ function openStaff() {
   document.head.appendChild(sc);
 }
 const VOC = setupVoc({ S, esc, say, today: () => today, update: () => update(), render: () => { if (isAdm && admTab === 'voc' && !viewMaid && !dlg) { const y = window.scrollY; render(); window.scrollTo(0, y); } }, isAdm: () => isAdm, who: () => (ADMINS.filter(a => isAdmUser(a, user))[0] || {}).label || '' });
+const RS = setupSync({ S, esc, say, pick: PICK, report: (w, m) => report(w, m),
+  data: () => data, info: () => infoDocs, chg: () => chgDocs,
+  recs: () => Object.keys(recs).map(k => recs[k]).filter(r => r.status === '완료' || r.status === '이상'),
+  change: (kind, maid, room) => change(kind, maid, room, null, true),
+  engine: async () => { if (!engine) engine = await import(new URL('engine.js?v=' + APP_VER, import.meta.url).href); return engine; },
+  isAdm: () => isAdm, who: () => (ADMINS.filter(a => isAdmUser(a, user))[0] || {}).label || '',
+  render: () => { if (isAdm && data && admTab === 'link' && !viewMaid && !dlg) { const y = window.scrollY; render(); window.scrollTo(0, y); } } });
 const leaveCall = makeLeaveApi(S, () => user && user.uid);   // 2026-11-18 연차 Firebase 전환 (옛 callOld 대신)
 const MW = setupMyWork({ esc, lsGet, lsSet, toast, vibe, call: (fn, a, as) => leaveCall(fn, a, as, me), me: () => me, mate: () => mateOf(me), pair: () => { const mt = mateOf(me); return (teamPairs.filter(p => p.indexOf(me) >= 0)[0] || [me, mt]).slice(); }, isAdm: () => isAdm, dlg: () => dlg, setDlg: d => { dlg = d; }, closeDlg: () => closeDlg() });
 

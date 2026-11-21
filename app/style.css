@@ -669,3 +669,6 @@ body.gated #main,body.gated .top{filter:blur(5px);pointer-events:none;user-selec
 .dq-rooms button{min-height:58px;border-radius:12px;border:2px solid var(--line);background:var(--surface);color:var(--ink);font:800 19px var(--f-num);cursor:pointer}
 .dq-rooms button small{display:block;font:700 11px var(--f-body);color:var(--muted)}
 .dq-rooms button[aria-pressed="true"]{border-color:#E8710A;background:#FFF0E0;color:#8A3D00}
+/* 📄 정비보고서 연결 (2026-11-21) */
+.rscard .upbtn,.rstest .upbtn{width:100%;min-height:48px;border-radius:12px;font:700 16px var(--f-body);background:var(--navy);color:#fff;border:0;cursor:pointer;margin-bottom:6px}
+.rspend{border:2px solid var(--navy)}
