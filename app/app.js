@@ -7,7 +7,7 @@ import { setupVoc } from './voc.js';
 import * as K from './keys.js';   // 🔑 플로어키 서명 (2026-11-19)
 import { setupDreq } from './dreq.js';   // 🔔 더티 요청 (2026-11-21)
 
-const APP_VER = '2026.11.21-4';
+const APP_VER = '2026.11.21-5';
 // 관리자 = 보안 규칙 isAdmin 과 같은 목록 (UID 는 공개돼도 되는 값)
 const ADMINS = [
   { uid: 'iw2orXgIgPgTbLUQa0b41XJ9Dvd2', label: '소장', email: 'unieshaeundae+admin@gmail.com' },
@@ -43,6 +43,7 @@ const HUB = (() => { const m = /[?&]hub=(today|assign|set)\b/.exec(location.sear
 if (HUB) document.documentElement.classList.add('inhub');
 let user = null, isAdm = false, me = null, devState = 'wait';   // devState: wait / none / ok
 let today = seoulDate(), dayDoc = undefined, dayCache = false, cacheSince = 0;
+let meals = null;
 let myPlan = null, plans = {}, chgDocs = [], recDocs = [], ackDocs = [], notices = [], devices = [], relay = null;
 let roomInfo = {}, infoAsked = {}, infoDocs = {}, pastAcks = {}, dirtyDoc = null, acksReady = false, errDocs = [], cmp = null, upDoc = null;
 let data = null, recs = {}, pend = {}, dlg = null, busy = false, viewMaid = null;
@@ -122,6 +123,7 @@ function start() {
   subs.push(S.listenQuery('notices', [], docs => { notices = docs.map(x => x.data); update(); }, e => console.warn('공지 읽기 실패', e)));
   subs.push(S.listenDoc('meta/dirty', d => { dirtyDoc = d; update(); }, () => {}));
   subs.push(S.listenDoc('meta/keys', d => { keyCfg = d; update(); }, () => {}));
+  if (!isAdm) subs.push(S.listenDoc('meta/meals', d => { meals = d; update(); }, () => {}));   // 🍚 오늘 점심 (2026-11-21, 허브에서 올린 주간 식단)
   subs.push(S.listenDoc('meta/teams', d => {
     const old = mateOf(me);
     teams = (d && d.mate) || {}; teamPairs = ((d && d.pairs) || []).map(x => String(x).split(',')); teamsLoaded = true;
@@ -422,11 +424,11 @@ function render() {
     if (viewMaid && maidOf(viewMaid)) renderMaid(adminView(viewMaid), true); else { viewMaid = null; renderAdmin(); }
   } else if (!me) { $('#bar').innerHTML = ''; renderPicker(); }
   else if (data.noPlan) {
-    $('#bar').innerHTML = '<div class="mebar"><span class="mechip">' + esc(meLabel()) + ' 님</span>' + noticeBtn(me) + sndBtn() + '</div>';
+    $('#bar').innerHTML = '<div class="mebar"><span class="mechip">' + esc(meLabel()) + ' 님</span>' + noticeBtn(me) + lunchBtn() + sndBtn() + '</div>';
     $('#main').innerHTML = bands() + instHtml() + '<div class="notice"><strong>오늘 배정은 아직 준비 중이에요.</strong><br>' + esc(data.label) + ' 배정은 오전 8시 30분에 올라와요.<br>화면을 켜 두면 올라오는 대로 객실이 자동으로 나타나요.</div><button class="foot" data-admin-in="1">관리자 메뉴</button>';
   } else {
     const m = data.maids[0] || null;
-    $('#bar').innerHTML = '<div class="mebar"><span class="mechip">' + esc(meLabel()) + ' 님</span>' + noticeBtn(me) + sndBtn() + '</div>';
+    $('#bar').innerHTML = '<div class="mebar"><span class="mechip">' + esc(meLabel()) + ' 님</span>' + noticeBtn(me) + lunchBtn() + sndBtn() + '</div>';
     if (m) renderMaid(m, false);
     else $('#main').innerHTML = bands() + '<div class="notice"><strong>오늘 ' + esc(meLabel()) + ' 님 배정 객실이 없어요.</strong><br>휴무이거나 배정이 아직 올라오지 않았어요.</div><button class="foot" data-admin-in="1">관리자 메뉴</button>';
   }
@@ -497,6 +499,17 @@ function roomCard(m, x, isTeam) {
 function ventKey() { return 'rm_vent_' + today; }
 const ventHidden = {};
 function ventHtml() { const t = nowHM(); if (t < VENT_FROM || t >= VENT_TO || lsGet(ventKey()) === '1' || ventHidden[ventKey()]) return ''; return '<div class="vent"><span class="vi">🪟</span><span class="vt"><b>12시 환기 알림제</b>점심 식사 맛있게 드시고, 드신 후 환기 부탁드립니다.</span><button data-vent="1">확인</button></div>'; }
+// 🍚 오늘 점심 (2026-11-21): 허브에서 올린 주간 식단표(meta/meals)의 오늘 중식 — 14시까지만, 누르면 원산지까지
+const MEAL_TO = '14:00';
+function mealSplit(x) { const m = String(x || '').match(/^(.*?)\s*\((.*)\)\s*$/); return m && m[1] ? { n: m[1].trim(), o: m[2].trim() } : { n: String(x || '').trim(), o: '' }; }
+function lunchOf() { const d = meals && meals.days && meals.days[today]; return d && Array.isArray(d.l) && d.l.length ? d.l : null; }
+// 11/21 사용자: 자리 차지 → 카드 대신 위쪽 이름 옆 작은 버튼, 누르면 메뉴 창
+function lunchBtn() { return lunchOf() && nowHM() < MEAL_TO ? '<button class="tbtn" data-lunch="1">🍚 점심 메뉴</button>' : ''; }
+function lunchDlg() {
+  const L = lunchOf() || [];
+  return '<h3>🍚 오늘 점심 <small style="font-weight:500;color:var(--muted)">' + esc(data.label || '') + '</small></h3><ul class="lunchl">' + L.map(x => { const y = mealSplit(x); return '<li><b>' + esc(y.n) + '</b>' + (y.o ? '<small>' + esc(y.o) + '</small>' : '') + '</li>'; }).join('') + '</ul>' +
+    ((meals.notes || []).length ? '<p class="hint" style="font-size:13px">' + meals.notes.map(esc).join('<br>') + '</p>' : '') + '<div class="acts"><button data-x="1">닫기</button></div>';
+}
 function renderMaid(m, asAdmin) {
   const d = doneCount(m), t = totalUnits(m), rem = t - d;
   shownM = m;
@@ -1051,6 +1064,7 @@ function drawDlg() {
         : acked(n, me) ? '<div class="ackbar"><p class="rec">' + (ackAt(n, me) > 1 ? hm(ackAt(n, me)) + '에 ' : '') + '확인했어요.</p><div class="acts"><button data-x="1">닫기</button></div></div>'
         : '<div class="ackbar"><button class="big" data-act="ack" style="background:var(--navy)">확인했어요</button>' + (dlg.must ? '' : '<div class="acts"><button data-x="1">나중에</button></div>') + '</div>');
   } else if (k === 'instguide') body = instGuideHtml();
+  else if (k === 'lunch') body = lunchDlg();
   else if (k === 'nlist') {
     const list = isAdm ? (data.notices || []) : myNotices(me);
     body = '<h3>공지</h3><div class="nlist" style="display:flex;flex-direction:column;gap:8px">' + list.map((n, i) => '<button class="n" data-open="' + i + '"><span><b>' + esc(n.title) + '</b><br><small>' + esc(n.from || '') + (n.to && n.to !== n.from ? ' ~ ' + esc(n.to) : '') + '</small></span>' +
@@ -1157,6 +1171,7 @@ document.addEventListener('click', e => {
   if (at('[data-dreq]') && !isAdm && me) { const m = data.maids[0]; if (m) DR.check(m); return; }
   if (at('[data-addroom]')) { if (isAdm && viewMaid) dlg = { kind: 'addroom', maid: viewMaid, proxy: true, no: '' }; else if (!isAdm && me) dlg = { kind: 'addroom', maid: addTarget(), no: '' }; drawDlg(); const f = $('#roomno'); if (f) f.focus(); return; }
   if (at('[data-nlist]')) { dlg = { kind: 'nlist' }; drawDlg(); return; }
+  if (at('[data-lunch]')) { dlg = { kind: 'lunch' }; drawDlg(); return; }
   if (at('[data-back]')) { viewMaid = null; render(); window.scrollTo(0, 0); return; }
   const vw = at('[data-view]'); if (vw) { viewMaid = vw.getAttribute('data-view'); render(); window.scrollTo(0, 0); return; }
   if (keyClick(at)) return;
