@@ -5,8 +5,9 @@ import { setupMyWork } from './mywork.js';
 import { makeLeaveApi } from './leave_my.js';
 import { setupVoc } from './voc.js';
 import * as K from './keys.js';   // 🔑 플로어키 서명 (2026-11-19)
+import { setupDreq } from './dreq.js';   // 🔔 더티 요청 (2026-11-21)
 
-const APP_VER = '2026.11.21-3';
+const APP_VER = '2026.11.21-4';
 // 관리자 = 보안 규칙 isAdmin 과 같은 목록 (UID 는 공개돼도 되는 값)
 const ADMINS = [
   { uid: 'iw2orXgIgPgTbLUQa0b41XJ9Dvd2', label: '소장', email: 'unieshaeundae+admin@gmail.com' },
@@ -105,7 +106,7 @@ S.onUser(u => {
   if (!u) { S.signInAnon().catch(e => { $('#main').innerHTML = '<div class="notice"><strong>처음 연결하지 못했어요.</strong><br>인터넷을 켜고 앱을 다시 열어 주세요.<br><small>' + esc(errText(e)) + '</small></div>'; }); return; }
   start();
 });
-function stopAll() { subs.concat(meSubs).forEach(f => { try { f(); } catch (e) {} }); subs = []; meSubs = []; try { VOC.stop(); } catch (e) {} }
+function stopAll() { subs.concat(meSubs).forEach(f => { try { f(); } catch (e) {} }); subs = []; meSubs = []; try { VOC.stop(); } catch (e) {} try { DR.stop(); } catch (e) {} }
 function start() {
   stopAll();
   isAdm = ADMINS.some(a => isAdmUser(a, user));
@@ -175,6 +176,7 @@ function listenMine() {
   meSubs.push(S.listenQuery(D + '/keychk', [], docs => { keyChk = docs; if (dlg && dlg.kind === 'keylist') drawDlg(); }, () => {}));
   meSubs.push(S.listenQuery(D + '/keyret', [['maid', 'in', keyMine()]], docs => { keyRet = docs; update(); }, () => {}));
   scanPastAcks(nm);
+  DR.listen(today, nm, mt);   // 🔔 더티 요청: 내 요청 문서 + 오늘 더티 배분 (문서 2개)
 }
 
 // =====================================================================
@@ -357,6 +359,8 @@ function offline() { return !navigator.onLine || (dayCache && cacheSince && Date
 // 화면
 // =====================================================================
 const vibe = ms => { try { if (navigator.vibrate) navigator.vibrate(ms); } catch (e) {} };
+const DR = setupDreq({ S, esc, toast: m => toast(m), update: () => update(), vibe: ms => vibe(ms), withTimeout: (p, ms, m) => withTimeout(p, ms, m),
+  today: () => today, me: () => me, uid: () => user && user.uid, ver: APP_VER, isDirty: r => isDirty(r), done: (m, x) => !!recOf(recWho(m, x), x.room) });
 const IC = {
   clock: '<svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>',
   bed: '<svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 18V8M3 14h18v4M21 14v-2a3 3 0 0 0-3-3h-7v5"/><circle cx="7" cy="11" r="2"/></svg>',
@@ -504,6 +508,7 @@ function renderMaid(m, asAdmin) {
   const dueLeft = m.rooms.filter(x => x.due && !recOf(recWho(m, x), x.room)).sort((a, b) => (a.due < b.due ? -1 : 1));
   const dirtyLeft = m.rooms.filter(x => isDirty(x.room) && !recOf(recWho(m, x), x.room));
   let html = asAdmin ? '' : bands() + keyPastHtml() + instHtml() + ventHtml() + swapBanner(m) + keyBand(m, allDone);
+  if (!asAdmin) html += DR.band(m);
   html += asAdmin ? '<div class="amode"><button class="ghost back" data-back="1">← 전체 현황</button><span>' + (m.team && m.team.length > 1 ? esc(m.team.join('·')) + ' 조 화면 (조 휴대폰과 같음 · 객실을 누르면 배정받은 분 이름으로 대신 처리)' : esc(m.name) + ' 님 화면' + (m.mateOff ? ' · 2인 1조 (짝 ' + esc(m.mateOff) + ' 님 오늘 배정 없음)' : '') + ' (객실을 누르면 대신 처리)') + '</span></div>' : '';
   const tile = (cls, n, lbl, jump) => (jump ? '<button class="stat ' + cls + '" data-jump="' + esc(jump) + '">' : '<div class="stat ' + cls + '">') + '<b>' + n + '</b><span>' + lbl + '</span>' + (jump ? '</button>' : '</div>');
   const isTeam = !!(m.team && m.team.length > 1), teamName = isTeam ? m.team.join(' · ') : m.name;
@@ -1149,6 +1154,7 @@ document.addEventListener('click', e => {
   if (at('[data-inst-x]')) { instClosed = true; lsSet('rm_inst_hide', String(Date.now() + 7 * 864e5)); render(); return; }
   if (at('[data-inst]')) { dlg = { kind: 'instguide', os: OS === 'ios' ? 'ios' : 'android' }; drawDlg(); return; }
   if (at('[data-vent]')) { ventHidden[ventKey()] = 1; lsSet(ventKey(), '1'); render(); return; }
+  if (at('[data-dreq]') && !isAdm && me) { const m = data.maids[0]; if (m) DR.check(m); return; }
   if (at('[data-addroom]')) { if (isAdm && viewMaid) dlg = { kind: 'addroom', maid: viewMaid, proxy: true, no: '' }; else if (!isAdm && me) dlg = { kind: 'addroom', maid: addTarget(), no: '' }; drawDlg(); const f = $('#roomno'); if (f) f.focus(); return; }
   if (at('[data-nlist]')) { dlg = { kind: 'nlist' }; drawDlg(); return; }
   if (at('[data-back]')) { viewMaid = null; render(); window.scrollTo(0, 0); return; }
