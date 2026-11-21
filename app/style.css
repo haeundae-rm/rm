@@ -629,7 +629,11 @@ body.gated #main,body.gated .top{filter:blur(5px);pointer-events:none;user-selec
 .sub.rinfo{width:100%;margin-top:10px;border-color:var(--t-stay,#E07B00);color:var(--t-stay,#E07B00)}
 .ih{margin:14px 0 6px;font:800 15px var(--f-body);color:var(--ink)}
 .iform{display:flex;flex-direction:column;gap:8px}
-.iform .seg2 button[data-stay="1"][aria-pressed="true"]{background:var(--t-stay,#E07B00)}
+.chips{display:flex;flex-wrap:wrap;gap:8px}
+.chips button{min-height:44px;padding:0 14px;border-radius:999px;border:2px solid var(--c);background:transparent;color:var(--ink);font:800 15px var(--f-body);cursor:pointer}
+.chips button[aria-pressed="true"]{background:var(--c);color:#fff}
+.chips button.dk[aria-pressed="true"]{color:#10233F}
+.chips button[aria-pressed="true"]::before{content:"✓ "}
 .tsel{display:flex;align-items:center;gap:8px}
 .tsel select{flex:1;min-height:44px;font:700 16px var(--f-body);padding:6px 8px;border-radius:10px;border:1px solid var(--line);background:var(--bg);color:var(--ink)}
 .iform input{min-height:44px;font:500 15px var(--f-body);padding:8px 10px;border-radius:10px;border:1px solid var(--line);background:var(--bg);color:var(--ink)}

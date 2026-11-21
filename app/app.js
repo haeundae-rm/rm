@@ -188,23 +188,29 @@ function steps(c) {   // 교환 문서 하나 = 예전 '넘김' 두 줄
   if (d.kind !== '교환') return [Object.assign({}, base, { kind: d.kind, maid: d.maid, room: d.room })];
   return [Object.assign({}, base, { kind: '넘김', maid: d.maid, room: d.room, to: d.to }), Object.assign({}, base, { kind: '넘김', maid: d.to, room: d.toRoom, to: d.maid })];
 }
-// 관리자가 고친 객실 표시 (days/{날}/info/{객실}: stay 재실, after~due 시간, note 안내) — 있으면 배정표 값 대신
+// 관리자가 고친 객실 표시 (days/{날}/info/{객실}: tags 표시(재실·단체 등), after~due 시간, note 안내) — 있으면 배정표 값 대신
 function applyInfo(x) {
   const i = infoDocs[x.room]; if (!i) return x;
-  x.tags = x.tags.filter(t => t !== '재실'); if (i.stay) x.tags.push('재실');
+  const pick = infoTags(i), keep = x.tags.filter(t => PICK.indexOf(tagKey(t)) < 0 || pick.indexOf(tagKey(t)) >= 0);   // 단체:이름 처럼 붙은 이름은 그대로
+  pick.forEach(k => { if (!keep.some(t => tagKey(t) === k)) keep.push(k); });
+  x.tags = keep;
   x.after = i.after || ''; x.due = i.due || ''; x.note = i.note || '';
   return x;
 }
+const PICK = ['재실', '단체', '테마', '룸체', 'VIP', '연박·재입', '주의', '당직', '학단 복구'];   // 관리자가 고를 수 있는 표시
+function infoTags(i) { return Array.isArray(i.tags) ? i.tags.filter(t => PICK.indexOf(t) >= 0) : (i.stay ? ['재실'] : []); }
 const TIMES = (() => { const a = []; for (let h = 8; h <= 18; h++) { a.push(('0' + h).slice(-2) + ':00'); if (h < 18) a.push(('0' + h).slice(-2) + ':30'); } return a; })();
 function infoForm(f) {
   const sel = (id, v, ph) => '<select id="' + id + '"><option value="">' + ph + '</option>' + TIMES.map(t => '<option value="' + t + '"' + (t === v ? ' selected' : '') + '>' + hmK(t) + '</option>').join('') + '</select>';
-  return '<div class="iform"><div class="seg2"><button data-stay="0" aria-pressed="' + !f.stay + '">일반</button><button data-stay="1" aria-pressed="' + !!f.stay + '">재실 (주황)</button></div>' +
+  const on = f.tags || [];
+  return '<div class="iform"><div class="chips">' + PICK.map(t => '<button' + (DARKTXT[t] ? ' class="dk"' : '') + ' data-tag="' + esc(t) + '" aria-pressed="' + (on.indexOf(t) >= 0) + '" style="--c:var(' + (TAGC[t] || '--t-set') + ')">' + esc(t) + '</button>').join('') + '</div>' +
+    '<p class="hint">필요한 표시를 눌러 주세요 (여러 개 가능, 안 누르면 표시 없음).</p>' +
     '<div class="tsel">' + sel('iafter', f.after, '시작 없음') + '<span>~</span>' + sel('idue', f.due, '끝 없음') + '</div>' +
     '<input id="inote" type="text" maxlength="60" placeholder="안내 (선택) · 예: 고객 외출 후 정비" value="' + esc(f.note || '') + '">' +
-    '<p class="hint">시간을 고르면 메이드 화면에 "13시~14시 사이 정비"처럼 나와요.</p></div>';
+    '<p class="hint">시간·안내는 비워도 돼요. 시간을 고르면 메이드 화면에 "13시~14시 사이 정비"처럼 나와요.</p></div>';
 }
-function infoOfForm(f) { return { stay: !!f.stay, after: f.after || '', due: f.due || '', note: String(f.note || '').trim().slice(0, 60) }; }
-function infoEmpty(i) { return !i.stay && !i.after && !i.due && !i.note; }
+function infoOfForm(f) { return { tags: PICK.filter(t => (f.tags || []).indexOf(t) >= 0), after: f.after || '', due: f.due || '', note: String(f.note || '').trim().slice(0, 60) }; }
+function infoEmpty(i) { return !i.tags.length && !i.after && !i.due && !i.note; }
 function infoBad(i) { return i.after && i.due && i.after >= i.due ? '시작 시각이 끝 시각보다 빨라야 해요.' : ''; }
 function saveInfo(room, i) {
   // 비워도 지우지 않고 빈 값으로 저장 (배정표에 있던 재실·시간을 끈 것도 남도록)
@@ -1021,14 +1027,14 @@ function drawDlg() {
     if (r && !dlg.edit) {
       body += '<h3>자가인스펙션 확인 · 정비 완료</h3><p class="rec">' + (isAdm ? '<b>' + hm(r.at) + '</b> · ' : '') + esc(r.maid) + (r.proxy ? ' (관리자 대신)' : '') + (r.issues.length ? ' · 이상: <b>' + esc(r.issues.join(', ')) + '</b>' : ' · 4개 항목 모두 확인') + (r.memo ? '<br>메모: ' + esc(r.memo) : '') + '</p>' +
         '<div class="acts"><button data-x="1">닫기</button><button data-act="redo">' + (r.memo ? '메모 수정' : '메모 남기기') + '</button><button class="danger" data-act="undo">완료 취소</button></div>' +
-        (isAdm ? '<button class="sub rinfo" data-act="rinfo">재실·시간 표시 바꾸기</button>' : '');
+        (isAdm ? '<button class="sub rinfo" data-act="rinfo">표시·시간 바꾸기</button>' : '');
     } else if (r) {
       body += '<h3>객실 메모</h3>' + memoBox + '<button class="big" data-act="memosave">메모 저장</button><div class="acts"><button data-act="back">← 돌아가기</button></div>';
     } else {
       body += '<h3>자가인스펙션</h3><div class="chk">' + ITEMS.map(i => '<div class="it"><b>' + esc(i.key) + '</b><span>' + esc(i.detail) + '</span></div>').join('') + '</div>' + memoBox +
         '<button class="big" data-act="allok">4개 항목 모두 확인 · 정비 완료</button>' +
         '<div class="acts"><button data-x="1">닫기</button><button class="sub" data-act="swap">객실 교환</button><button class="sub red" data-act="rm">객실 제거</button></div>' +
-        (isAdm ? '<button class="sub rinfo" data-act="rinfo">재실·시간 표시 바꾸기</button>' : '');
+        (isAdm ? '<button class="sub rinfo" data-act="rinfo">표시·시간 바꾸기</button>' : '');
     }
   } else if (k === 'notice') {
     const n = dlg.n; cls = 'panel npanel';
@@ -1059,9 +1065,9 @@ function drawDlg() {
   } else if (k === 'addroom') {
     const ok = /^\d{3,4}$/.test(dlg.no || '');
     body = '<h3>' + (dlg.proxy ? esc(dlg.maid) + ' 님 ' : '') + '추가할 객실 호수를 입력해 주세요</h3><input id="roomno" class="roomin" type="text" inputmode="numeric" pattern="[0-9]*" maxlength="4" autocomplete="off" value="' + esc(dlg.no || '') + '">' +
-      (dlg.proxy ? '<h4 class="ih">재실·시간 (필요할 때만)</h4>' + infoForm(dlg) : '') + errP() + btns('취소', ok ? esc(dlg.no) + '호 추가' : '추가', ok);
+      (dlg.proxy ? '<h4 class="ih">표시·시간 (필요할 때만)</h4>' + infoForm(dlg) : '') + errP() + btns('취소', ok ? esc(dlg.no) + '호 추가' : '추가', ok);
   } else if (k === 'rinfo') {
-    body = '<h3>' + esc(dlg.room) + '호 표시 바꾸기</h3><p>재실·시간·안내를 고르면 ' + esc(dlg.maid) + ' 님 화면에도 바로 바뀌어요.</p>' + infoForm(dlg) + errP() + btns('취소', '저장', true);
+    body = '<h3>' + esc(dlg.room) + '호 표시 바꾸기</h3><p>표시·시간·안내를 고르면 ' + esc(dlg.maid) + ' 님 화면에도 바로 바뀌어요.</p>' + infoForm(dlg) + errP() + btns('취소', '저장', true);
   } else if (k === 'rmroom') {
     if (dlg.proxy) body = '<h3>해당 객실을 제거하시겠습니까?</h3><p>' + esc(dlg.room) + '호 · 정비 대상에 제외됩니다.</p>' + errP() + btns('취소', '제거', true, 'danger');
     else body = '<h3>' + esc(dlg.room) + '호를 제외할까요?</h3><div class="warnbox"><b>' + esc(dlg.room) + ' 객실을 제외하면 아무도 정비하지 않습니다.</b><br>프런트나 관리자 지시가 있었나요?</div><p>맞으면 아래에 <b>' + esc(dlg.room) + '</b>을(를) 직접 입력해 주세요.</p>' +
@@ -1077,7 +1083,7 @@ function drawDlg() {
   else if (k === 'verify') body = vfBody();
   else if (/^key/.test(k)) { body = keyDlgBody(); if (!body) { dlg = null; el.innerHTML = ''; return; } }
   else if (k === 'proxyask') body = '<h3>' + esc(dlg.maid) + ' 님 대신 처리할까요?</h3><p>' + esc(dlg.room) + '호 · 기록에 "관리자 대신"이 표시돼요.</p>' + btns('취소', '대신 처리', true) +
-    '<button class="sub rinfo" data-act="rinfo">재실·시간 표시 바꾸기</button>';
+    '<button class="sub rinfo" data-act="rinfo">표시·시간 바꾸기</button>';
   el.innerHTML = '<div class="scrim"' + (k === 'notice' && dlg.must ? '' : ' data-x="1"') + '><div class="' + cls + '">' + body + '</div></div>';
 }
 function closeDlg() {
@@ -1164,11 +1170,11 @@ function onSheet(t, at) {
   const wh = at('[data-who]'); if (wh && dlg && dlg.kind === 'login') { const pw = $('#apw'); dlg.pw = pw ? pw.value : ''; dlg.who = Number(wh.getAttribute('data-who')); drawDlg(); return; }
   const ud = at('[data-update]'); if (ud && dlg && dlg.kind === 'upload') { dlg.date = ud.getAttribute('data-update'); if (dlg.buf) upBuild(); else drawDlg(); return; }
   const op = at('[data-open]'); if (op) { const list = isAdm ? (data.notices || []) : myNotices(me); openNotice(list[Number(op.getAttribute('data-open'))], false); return; }
-  const sy = at('[data-stay]'); if (sy && dlg) { const nt = $('#inote'); if (nt) dlg.note = nt.value; dlg.stay = sy.getAttribute('data-stay') === '1'; drawDlg(); return; }
+  const sy = at('[data-tag]'); if (sy && dlg) { const nt = $('#inote'); if (nt) dlg.note = nt.value; const t = sy.getAttribute('data-tag'), l = (dlg.tags || []).slice(), j = l.indexOf(t); if (j >= 0) l.splice(j, 1); else l.push(t); dlg.tags = l; drawDlg(); return; }
   const a = at('[data-act]'), act = a && a.getAttribute('data-act');
   if (dlg && act === 'rinfo' && isAdm && (dlg.kind === 'room' || dlg.kind === 'proxyask')) {
     const m = maidOf(dlg.maid), x = m && roomOf(m, dlg.room); if (!x) return;
-    dlg = { kind: 'rinfo', maid: dlg.maid, room: dlg.room, stay: x.tags.indexOf('재실') >= 0, after: x.after || '', due: x.due || '', note: infoDocs[x.room] ? x.note : noteRest(x) };
+    dlg = { kind: 'rinfo', maid: dlg.maid, room: dlg.room, tags: PICK.filter(k => x.tags.some(t => tagKey(t) === k)), after: x.after || '', due: x.due || '', note: infoDocs[x.room] ? x.note : noteRest(x) };
     drawDlg(); return;
   }
   if (dlg && dlg.kind === 'room' && act) {
@@ -1225,7 +1231,7 @@ function onSheet(t, at) {
     const nt = $('#inote'); if (nt) d0.note = nt.value;
     const ai = d0.proxy ? infoOfForm(d0) : null, abad = ai && infoBad(ai); if (abad) { d0.err = abad; drawDlg(); return; }
     busy = true; drawDlg();
-    doAdd(d0.maid, d0.no, !!d0.proxy).then(res => (ai && !infoEmpty(ai) ? withTimeout(saveInfo(res.room, ai), 15000, res.room + '호는 추가됐지만 재실·시간이 저장되지 않았어요. 객실을 눌러 다시 해 주세요.') : null).then(() => res)).then(res => { busy = false; dlg = null; drawDlg(); say(res.room + '호를 추가했어요.' + (res.dup ? (d0.proxy ? ' (' + res.dup + ' 님 배정과 겹침)' : ' 다른 분 배정과 겹치는 객실이라 관리자가 확인해요.') : '')); }).catch(failDlg);
+    doAdd(d0.maid, d0.no, !!d0.proxy).then(res => Promise.resolve(ai && !infoEmpty(ai) ? withTimeout(saveInfo(res.room, ai), 15000, res.room + '호는 추가됐지만 표시·시간이 저장되지 않았어요. 객실을 눌러 다시 해 주세요.') : null).then(() => res)).then(res => { busy = false; dlg = null; drawDlg(); say(res.room + '호를 추가했어요.' + (res.dup ? (d0.proxy ? ' (' + res.dup + ' 님 배정과 겹침)' : ' 다른 분 배정과 겹치는 객실이라 관리자가 확인해요.') : '')); }).catch(failDlg);
     return;
   }
   if (d0.kind === 'rmroom') {
