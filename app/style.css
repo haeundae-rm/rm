@@ -637,3 +637,22 @@ body.gated #main,body.gated .top{filter:blur(5px);pointer-events:none;user-selec
 .tsel{display:flex;align-items:center;gap:8px}
 .tsel select{flex:1;min-height:44px;font:700 16px var(--f-body);padding:6px 8px;border-radius:10px;border:1px solid var(--line);background:var(--bg);color:var(--ink)}
 .iform input{min-height:44px;font:500 15px var(--f-body);padding:8px 10px;border-radius:10px;border:1px solid var(--line);background:var(--bg);color:var(--ink)}
+/* 🔔 더티 요청 (2026-11-21) */
+.dreq{margin:0 0 2px;background:var(--surface);border:2px solid var(--t-room);border-radius:14px;padding:12px 14px;display:flex;flex-direction:column;gap:6px}
+.dreq p{margin:0;font-size:14px;color:var(--muted)}
+.dreq .dq-t{font:900 17px var(--f-body);color:var(--ink)}
+.dreq .dq-btn{min-height:54px;border:0;border-radius:12px;background:var(--t-room);color:#fff;font:900 18px var(--f-body);cursor:pointer}
+.dreq .dq-btn:disabled{opacity:.6}
+.dreq.on{border-color:#E8710A;background:#FFF5EB}
+.dreq.on .dq-t b{color:#C25A00}
+.dreq.on .dq-btn{background:#E8710A}
+.dreq.ok{border-color:var(--done);background:var(--done-soft)}
+.dreq.ok .dq-t{color:var(--done)}
+#dreqsheet .scrim{position:fixed;inset:0;z-index:40;background:rgba(16,35,63,.45);display:flex;align-items:flex-end;justify-content:center}
+.dq-nums{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.dq-nums span{background:var(--bg);border-radius:10px;padding:8px 10px;font-size:14px;color:var(--muted)}
+.dq-nums b{font:800 18px var(--f-num);color:var(--ink)}
+.dq-rooms{display:grid;grid-template-columns:repeat(auto-fill,minmax(78px,1fr));gap:8px}
+.dq-rooms button{min-height:58px;border-radius:12px;border:2px solid var(--line);background:var(--surface);color:var(--ink);font:800 19px var(--f-num);cursor:pointer}
+.dq-rooms button small{display:block;font:700 11px var(--f-body);color:var(--muted)}
+.dq-rooms button[aria-pressed="true"]{border-color:#E8710A;background:#FFF0E0;color:#8A3D00}
