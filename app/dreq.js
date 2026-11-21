@@ -3,11 +3,11 @@
 //   ① 더티 대상이고 받을 더티(지원 수량 − 정비보조가 한 방)가 남아 있어야 함
 //   ② 그리고 둘 중 하나: 가) 낮 12시가 지났는데 정비보조가 내 방을 한 번도 안 함
 //                        나) 완료 안 한 남은 방 수 ≤ 남은 더티 수량 (더티 없이는 할 방이 없음) — 12시 전에도 됨
-//   ③ 한 번 누르면 1시간 뒤에야 다시 (규칙에서도 막음)
+//   ③ 한 번 누르면 20분 뒤에야 다시 (규칙에서도 막음 · 11/21 사용자: 1시간 → 20분)
 //   먼저 할 방은 메이드가 최대 2실 고름 (선택). 시간 정해진 방은 미리 골라 둠
 // 저장: sup/{날짜}/req/{메이드 이름} 하나를 덮어씀 (n = 오늘 몇 번째, hist = 지난 요청 시각). 정비보조가 그 메이드 방을 체크하면 정비보조 앱에서 저절로 꺼짐
 // 판단은 누를 때 한 번만 정비 지원 기록(sup/{날짜}, rows, rm)을 읽어서 함 — 메이드 휴대폰이 늘 구독하지 않게 (읽기 비용)
-export const COOL = 3600e3, NOON = '12:00', MAXR = 2;
+export const COOL = 20 * 60e3, NOON = '12:00', MAXR = 2;
 
 const num = v => { const n = typeof v === 'number' ? v : v instanceof Date ? v.getTime() : Date.parse(v); return isNaN(n) ? 0 : n; };
 const clean = v => String(v || '').replace(/\s+/g, ' ').trim().slice(0, 20);
@@ -128,7 +128,7 @@ export function setupDreq(g) {
       const names = m.team && m.team.length ? m.team : [m.name];
       const lr = leftRooms(m), info = supMaids(sp, rows, rm, SA, day), j = judge(info, names, lr.length, nowHM());
       const s = state(m);
-      if (s.st !== 'none' && !s.canAgain) j.ok = false, j.why = 'cool', j.msg = '한 번 요청하면 1시간 뒤에 다시 할 수 있어요. 다음은 ' + hm(s.next) + '부터예요.';
+      if (s.st !== 'none' && !s.canAgain) j.ok = false, j.why = 'cool', j.msg = '한 번 요청하면 20분 뒤에 다시 할 수 있어요. 다음은 ' + hm(s.next) + '부터예요.';
       const cand = lr.filter(x => !info.checks[x.room]).map(x => ({ room: x.room, due: x.due || '' }));
       const pre = cand.filter(x => x.due).sort((a, b) => (a.due < b.due ? -1 : 1)).slice(0, MAXR).map(x => x.room);
       dlg = { m, names, j, cand, pick: pre, err: '' };
@@ -158,7 +158,7 @@ export function setupDreq(g) {
         '<h4 class="ih">먼저 해 줬으면 하는 방 (최대 ' + MAXR + '실, 안 골라도 돼요)</h4>' +
         '<div class="dq-rooms">' + dlg.cand.map(x => '<button data-dqr="' + esc(x.room) + '" aria-pressed="' + (dlg.pick.indexOf(x.room) >= 0) + '">' + esc(x.room) + (x.due ? '<small>' + esc(x.due) + '까지</small>' : '') + '</button>').join('') + '</div>' +
         (dlg.err ? '<p class="err">' + esc(dlg.err) + '</p>' : '') +
-        '<p class="hint">보내면 1시간 뒤에 다시 보낼 수 있어요.</p>' +
+        '<p class="hint">보내면 20분 뒤에 다시 보낼 수 있어요.</p>' +
         '<div class="acts"><button data-dqx="1">취소</button><button class="go" data-dqsend="1"' + (dlg.sending ? ' disabled' : '') + '>' + (dlg.sending ? '보내는 중…' : '🔔 요청 보내기') + '</button></div>';
     }
     box.innerHTML = '<div class="scrim" data-dqx="1"><div class="panel">' + b + '</div></div>';
