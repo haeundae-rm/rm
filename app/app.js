@@ -6,7 +6,7 @@ import { makeLeaveApi } from './leave_my.js';
 import { setupVoc } from './voc.js';
 import * as K from './keys.js';   // 🔑 플로어키 서명 (2026-11-19)
 
-const APP_VER = '2026.11.21-2';
+const APP_VER = '2026.11.21-3';
 // 관리자 = 보안 규칙 isAdmin 과 같은 목록 (UID 는 공개돼도 되는 값)
 const ADMINS = [
   { uid: 'iw2orXgIgPgTbLUQa0b41XJ9Dvd2', label: '소장', email: 'unieshaeundae+admin@gmail.com' },
@@ -938,7 +938,8 @@ function maybePopup() {
 }
 function openNotice(n, must) { dlg = { kind: 'notice', n, must }; drawDlg(); }
 function posterHtml(n) {
-  if (n.img) return '<img class="poster" alt="' + esc(n.title) + '" src="' + esc(n.img) + '">';
+  const L = n.imgs && n.imgs.length ? n.imgs : n.img ? [n.img] : [];   // 11/21: 허브 공지 사진 여러 장 (imgs[], img = 첫 장)
+  if (L.length) return L.map((u, i) => '<img class="poster" alt="' + esc(n.title) + (L.length > 1 ? ' ' + (i + 1) : '') + '" src="' + esc(u) + '">').join('');
   if (n.imgName) return '<p>사진이 커서 앱에 싣지 못했어요. 관리자에게 물어봐 주세요.</p>';
   return '';
 }
