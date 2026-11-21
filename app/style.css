@@ -159,7 +159,7 @@ main{padding:16px 16px 56px;max-width:760px;margin:0 auto;display:flex;flex-dire
 .roomin{letter-spacing:6px;text-align:center;font:700 30px var(--f-num);width:200px;padding:10px;border-radius:10px;border:1px solid var(--line);background:var(--bg);color:var(--ink);align-self:center}
 .rec b{color:var(--ink)}
 .npanel{max-height:94vh}
-.npanel .poster{width:100%;border-radius:12px;border:1px solid var(--line);display:block}
+.npanel .poster{width:100%;border-radius:12px;border:1px solid var(--line);display:block}.npanel .poster+.poster{margin-top:10px}
 .npanel .ackbar{position:sticky;bottom:calc(-18px - env(safe-area-inset-bottom));margin:0 -16px calc(-18px - env(safe-area-inset-bottom));padding:12px 16px calc(14px + env(safe-area-inset-bottom));background:var(--surface);border-top:1px solid var(--line);display:flex;flex-direction:column;gap:8px}
 .npanel .body{white-space:pre-line;font-size:16px;color:var(--ink)}
 .npanel .badge{align-self:flex-start;font:700 12px var(--f-body);background:var(--t-due);color:#fff;border-radius:99px;padding:3px 10px}
