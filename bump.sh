@@ -2,7 +2,7 @@
 # 버전 올리기 (2026-11-18): ./bump.sh  → 오늘 날짜 다음 번호로 아래 파일들의 버전 글자를 한 번에 바꿈
 #   (손으로 고치다 한 곳을 빼먹어 '새 버전' 띠가 안 사라진 11/18 사고 방지)
 cd "$(dirname "$0")" || exit 1
-FILES="app/app.js app/version.json app/index.html index.html"
+FILES="app/app.js app/version.json app/index.html index.html app/lost.js demo/index.html"   # 11/22: 습득물 · 체험 화면도 (안 올리면 휴대폰이 옛 파일을 씀)
 old=$(grep -o '20[0-9][0-9]\.[0-9][0-9]\.[0-9][0-9]-[0-9]*' app/version.json | head -1)
 [ -n "$old" ] || { echo "지금 버전을 app/version.json 에서 못 찾았어요"; exit 1; }
 today=$(TZ=Asia/Seoul date +%Y.%m.%d)
