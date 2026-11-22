@@ -8,7 +8,7 @@ import * as K from './keys.js';   // 🔑 플로어키 서명 (2026-11-19)
 import { setupDreq } from './dreq.js';   // 🔔 더티 요청 (2026-11-21)
 import { setupSync } from './rsync.js';   // 📄 정비보고서 연결 (2026-11-21): 오더테이커 PC 엑셀 → 바뀐 방만 앱에
 
-const APP_VER = '2026.11.22-1';
+const APP_VER = '2026.11.22-2';
 // 관리자 = 보안 규칙 isAdmin 과 같은 목록 (UID 는 공개돼도 되는 값)
 const ADMINS = [
   { uid: 'iw2orXgIgPgTbLUQa0b41XJ9Dvd2', label: '소장', email: 'unieshaeundae+admin@gmail.com' },
@@ -968,7 +968,7 @@ function maybePopup() {
   const n = myNotices(me).filter(x => x.popup && !acked(x, me) && !seenPopup[x.id])[0];
   if (n) openNotice(n, true);
 }
-function openNotice(n, must) { dlg = { kind: 'notice', n, must }; drawDlg(); }
+function openNotice(n, must) { dlg = { kind: 'notice', n, must }; drawDlg(); if (String(n.id || '').indexOf('hub-bday-') === 0) setTimeout(() => { try { confetti(); } catch (e) {} }, 250); }   // 🎂 생일 공지(서버 함수 bdayNotice)는 폭죽과 함께 (2026-11-22)
 function posterHtml(n) {
   const L = n.imgs && n.imgs.length ? n.imgs : n.img ? [n.img] : [];   // 11/21: 허브 공지 사진 여러 장 (imgs[], img = 첫 장)
   if (L.length) return L.map((u, i) => '<img class="poster" alt="' + esc(n.title) + (L.length > 1 ? ' ' + (i + 1) : '') + '" src="' + esc(u) + '">').join('');
