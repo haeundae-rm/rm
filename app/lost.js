@@ -2,7 +2,8 @@
 //   [🧳 습득물] → 카메라 → 내 객실 버튼 한 번 (🎤 말하기 · 번호 입력 · 복도는 예비) → AI가 품목 · 분류 → 접수 카드 이미지 → [카카오톡으로 공유]
 //   저장: lost/{id} (대장 한 줄) + lost_img/{id} (사진, 대장에서 볼 때만 읽음). 허브 '🧳 습득물 관리대장'이 오더테이커 대장을 대신함 (규칙 v27)
 //   카톡은 웹에서 특정 방으로 바로 못 보냄 → 휴대폰 공유 창 → 카카오톡 → 룸메이드 단톡방 (단톡방을 맨 위에 고정해 두면 한 번)
-import { readLost, setCfg, CATS } from './lostai.js?v=2026.11.22-6';
+import { readLost, setCfg, CATS } from './lostai.js?v=2026.11.22-7';
+import { openLostCam, closeLostCam, camOk } from './lostcam.js?v=2026.11.22-7';   // 📷 앱 안 카메라 (안내 띠)
 
 const MAXP = 3;
 const PLACE = { 귀중품: '귀중품 보관함', 음식: '습득물 냉장고', 파손주의: '파손주의 보관함' };
@@ -39,14 +40,27 @@ export function setupLost(ctx) {
   const md = d => Number(d.slice(5, 7)) + '월 ' + Number(d.slice(8)) + '일';
   const hm = t => { const d = new Date(t + 9 * 3600e3); return ('0' + d.getUTCHours()).slice(-2) + ':' + ('0' + d.getUTCMinutes()).slice(-2); };
 
-  // ---------- 사진 받기 (버튼을 누른 그 순간에 카메라를 열어야 해서 input 을 미리 만들어 둠)
+  // ---------- 사진 받기 (11/22 오후: 앱 안 카메라 + 안내 띠. 안 되면 휴대폰 기본 카메라 / 앨범)
+  //   파일 고르기 · 기본 카메라는 누른 순간에 열어야 해서 input 을 미리 만들어 둠
+  let inCam = null, inAlb = null;
+  function mkInput(cap) {
+    const x = document.createElement('input'); x.type = 'file'; x.accept = 'image/*'; if (cap) x.setAttribute('capture', 'environment');
+    x.style.display = 'none'; document.body.appendChild(x);
+    x.addEventListener('change', () => { const f = x.files && x.files[0]; x.value = ''; if (f) got(f); });
+    return x;
+  }
+  const native = () => { if (!inCam) inCam = mkInput(true); inCam.click(); };
+  const album = () => { if (!inAlb) inAlb = mkInput(false); inAlb.click(); };
+  const LS = 'lf_cam';   // 앱 안 카메라가 막힌 휴대폰은 7일 동안 바로 기본 카메라 (터치 한 번 아끼기)
+  function camBlocked() { try { return Number(localStorage.getItem(LS) || 0) > Date.now(); } catch (e) { return false; } }
   function pick() {
-    if (!input) {
-      input = document.createElement('input'); input.type = 'file'; input.accept = 'image/*'; input.setAttribute('capture', 'environment');
-      input.style.display = 'none'; document.body.appendChild(input);
-      input.addEventListener('change', () => { const f = input.files && input.files[0]; input.value = ''; if (f) got(f); });
-    }
-    input.click();
+    if (!camOk() || camBlocked()) { native(); return; }
+    openLostCam({
+      more: !!(L && L.stage !== 'done' && L.photos.length),
+      onShot: b => got(b), onAlbum: album,
+      onNative: () => { try { localStorage.setItem(LS, String(Date.now() + 7 * 864e5)); } catch (e) {} native(); },
+      onClose: () => {}
+    });
   }
   async function shrink(blob, side, q) {
     const bmp = await createImageBitmap(blob);
@@ -255,7 +269,7 @@ export function setupLost(ctx) {
   function close() {
     if (L && L.stage === 'card' && !L.saved && !confirm('아직 접수 안 했어요. 닫을까요?')) return;
     try { if (rec) rec.abort(); } catch (e) {}
-    L = null; ctx.closeDlg();
+    closeLostCam(); L = null; ctx.closeDlg();
   }
   return {
     btn: () => '<button class="tbtn lf-btn" data-lostbtn="1">🧳 습득물</button>',
