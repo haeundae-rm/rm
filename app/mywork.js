@@ -1,5 +1,6 @@
 // 내 근무 · 연차 신청 (새 앱) — 화면은 옛 앱 MyWork.html 그대로
 // 2026-11-18: 서버를 Apps Script 에서 Firebase 로 (leave_my.js). 4자리 비밀번호 없앰 → 소장님이 허브 '연차 관리 → 휴대폰 승인'에서 승인한 휴대폰만 열림
+import { workStat, HOL } from './workstat.js';   // 📊 특근 · 공휴일 근무 · OT (2026-11-22)
 export function setupMyWork(ctx) {
   const { esc, lsGet, lsSet, toast, vibe } = ctx;
   const $ = s => document.querySelector(s);
@@ -110,6 +111,7 @@ export function setupMyWork(ctx) {
       (d.since && d.since.slice(0, 7) >= d.ym ? '<p class="mw-note">앱 기록은 ' + Number(d.since.slice(5, 7)) + '월 ' + Number(d.since.slice(8)) + '일부터 있어요. 그 전 근무는 보이지 않아요.</p>' : '') +
       '<p class="mw-note">완료 = 앱에서 정비 완료를 누른 객실 (로얄은 2실). 종이 레포트로 하신 날은 배정만 보여요. 정확한 근무 일수·유닛은 월 결산 기준이에요. 오늘 기록은 1~2분 늦게 들어와요.</p>' +
       (mw.err ? '<p class="mw-note" style="color:var(--warn-red);font-weight:700">' + esc(mw.err) + '</p>' : '') + '</div>';
+    h += statHtml(d);
     const L = d.leave;
     if (L) {
       h += '<div class="mw-card" id="mw-leave"><h3>내 연차</h3><div class="mw-rem"><span class="u">남은 연차</span><span class="n' + (L.remain <= 0 ? ' neg' : '') + '">' + fmt(L.remain) + '</span><span class="u">개</span></div>' +
@@ -142,10 +144,25 @@ export function setupMyWork(ctx) {
     for (let i = 0; i < first; i++) h += '<div class="c none"></div>';
     for (let k = 1; k <= last; k++) {
       const ds = y + '-' + ('0' + M).slice(-2) + '-' + ('0' + k).slice(-2), o = d.days[ds], dw = (first + k - 1) % 7;
-      const cls = 'c' + (dw === 0 ? ' sun' : '') + (o ? ' work' : '') + (ds === d.today ? ' today' : '') + (!o && d.since && ds < d.since ? ' before' : '');
+      const cls = 'c' + (dw === 0 || HOL[ds] ? ' sun' : '') + (o ? ' work' : '') + (ds === d.today ? ' today' : '') + (!o && d.since && ds < d.since ? ' before' : '');
       h += '<div class="' + cls + '"><span class="d">' + k + '</span>' + (o ? '<small>완료 ' + fmt(o.d) + '</small><small class="a">배정 ' + fmt(o.a) + '</small>' : '') + '</div>';
     }
     return h + '</div>';
+  }
+  // 📊 이번 달 근무 숫자 (소장님 기준 · 숫자만, 금액 없음)
+  function statHtml(d) {
+    const s = workStat(d.days || {}, d.ym, d.today), M = Number(d.ym.slice(5));
+    const line = (k, v, sub) => '<div class="mw-wk"><span>' + k + '</span><b>' + v + '</b>' + (sub ? '<small>' + sub + '</small>' : '') + '</div>';
+    let h = '<div class="mw-card" id="mw-stat"><h3>📊 ' + M + '월 근무 숫자</h3>' +
+      '<div class="mw-facts"><div><b>' + s.work + '</b><span>출근</span></div><div><b>' + s.rest + '</b><span>쉰 날</span></div><div><b>' + s.weekend + '</b><span>보유 휴무</span></div></div>';
+    if (s.cur) h += s.left >= 0 ? line('남은 휴무', s.left + '일', '이번 달 토·일 ' + s.weekend + '개 중. 이보다 덜 쉬면 그만큼 특근이에요')
+      : line('보유 휴무보다 더 쉼', (-s.left) + '일', '모자란 날은 연차로 채워요');
+    else h += s.extra ? line('특근', s.extra + '일', '보유 휴무 ' + s.weekend + ' − 쉰 날 ' + s.rest)
+      : s.fill ? line('연차로 채운 날', s.fill + '일', '보유 휴무보다 더 쉰 날') : line('특근', '없음', '보유 휴무만큼 쉬었어요');
+    h += line('공휴일 근무', s.hol.length ? s.hol.length + '일' : '없음', s.hol.map(x => Number(x.day.slice(8)) + '일 ' + esc(x.name)).join(' · '));
+    h += line('OT', s.ot + '개', (s.plus || s.minus ? '9유닛 넘은 날 ' + s.plus + '일 · 9유닛 안 된 날 ' + s.minus + '일' : '') + (s.otRaw < 0 ? ' · 합이 마이너스라 0개로 봐요' : ''));
+    return h + '<p class="mw-note">정비보고서 배정 유닛(로얄 2) 기준 참고 숫자예요. ' + (s.cur ? '특근은 달이 끝나야 정해져요. ' : '') + '확정 숫자는 월 결산 기준이에요.' +
+      (s.known ? '' : ' (이 해 공휴일 목록이 아직 없어요)') + '</p></div>';
   }
   function yearMonths(L) { let h = ''; const lastM = Number(mw.data.today.slice(5, 7)); for (let m = 1; m <= lastM; m++) { const v = L.months[L.year + '-' + ('0' + m).slice(-2)] || 0; h += '<span class="' + (v ? '' : 'z') + '">' + m + '월 ' + fmt(v) + '</span>'; } return h; }
   function fmt(v) { return String(Math.round(Number(v || 0) * 10) / 10); }
