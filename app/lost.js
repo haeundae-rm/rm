@@ -2,8 +2,8 @@
 //   [🧳 습득물] → 카메라 → 내 객실 버튼 한 번 (🎤 말하기 · 번호 입력 · 복도는 예비) → AI가 품목 · 분류 → 접수 카드 이미지 → [카카오톡으로 공유]
 //   저장: lost/{id} (대장 한 줄) + lost_img/{id} (사진, 대장에서 볼 때만 읽음). 허브 '🧳 습득물 관리대장'이 오더테이커 대장을 대신함 (규칙 v27)
 //   카톡은 웹에서 특정 방으로 바로 못 보냄 → 휴대폰 공유 창 → 카카오톡 → 룸메이드 단톡방 (단톡방을 맨 위에 고정해 두면 한 번)
-import { readLost, setCfg, CATS } from './lostai.js?v=2026.11.22-7';
-import { openLostCam, closeLostCam, camOk } from './lostcam.js?v=2026.11.22-7';   // 📷 앱 안 카메라 (안내 띠)
+import { readLost, setCfg, CATS } from './lostai.js?v=2026.11.22-8';
+import { openLostCam, closeLostCam, camOk } from './lostcam.js?v=2026.11.22-8';   // 📷 앱 안 카메라 (안내 띠)
 
 const MAXP = 3;
 const PLACE = { 귀중품: '귀중품 보관함', 음식: '습득물 냉장고', 파손주의: '파손주의 보관함' };
@@ -80,8 +80,10 @@ export function setupLost(ctx) {
     if (L.photos.length >= MAXP) return;
     L.photos.push(p); L.err = '';
     if (L.photos.length === 1) {
+      const me = L; L.aiAt = Date.now();
+      setTimeout(() => { if (L === me && L.ai === 'busy') { L.ai = null; if (!L.cat) L.cat = '기타'; L.aiSlow = true; render(); } }, 20000);   // 20초 넘으면 손으로 적게
       readLost(p.b64).then(r => {
-        if (!L) return;
+        if (!L || L !== me || L.ai !== 'busy') return;
         L.ai = r || null;
         if (r) { if (!L.item) L.item = r.item; if (!L.cat) { L.cat = r.cat; L.police = r.police; } if (!L.room && r.room && L.stage === 'room' && myRooms().some(x => x.room === r.room)) L.aiRoom = r.room; }
         else if (!L.cat) L.cat = '기타';
@@ -168,7 +170,13 @@ export function setupLost(ctx) {
     L.card = { blob, url: URL.createObjectURL(blob) };
   }
   let cardT = 0;
-  function render() { if (!L) return; draw(); if (L.stage === 'card' || L.stage === 'done') { clearTimeout(cardT); cardT = setTimeout(() => makeCard().then(draw, () => {}), 60); } }
+  function render() {
+    if (!L) return;
+    if (L.stage === 'card' || L.stage === 'done') { L.cardBusy = true; clearTimeout(cardT); cardT = setTimeout(() => makeCard().then(() => { if (L) L.cardBusy = false; draw(); }, () => { if (L) L.cardBusy = false; draw(); }), 60); }
+    draw();
+  }
+  // 공유해도 되나: 판독이 끝났고(실패면 품목을 적었고) 카드가 그 내용으로 다시 만들어졌을 때만
+  const ready = () => L && L.room && L.card && !L.cardBusy && L.ai !== 'busy' && !!String(L.item || '').trim();
 
   // ---------- 저장 (대장 한 줄 + 사진)
   function save() {
@@ -187,6 +195,7 @@ export function setupLost(ctx) {
   }
   function shareText() { return '[습득물] ' + (/^\d+$/.test(L.room) ? L.room + '호' : '복도·공용') + ' ' + (L.item || '') + ' (' + (L.cat || '기타') + ' → ' + placeOf(L.cat) + ')' + (L.police ? ' 🚨경찰 인계 대상' : '') + ' · ' + ctx.me() + ' · ' + noOf(); }
   function share() {
+    if (!ready() && L.stage !== 'done') return;
     if (!L.card || !L.card.blob) return;
     const file = new File([L.card.blob], '습득물_' + noOf() + '.jpg', { type: 'image/jpeg' });
     const text = shareText();
@@ -200,7 +209,7 @@ export function setupLost(ctx) {
       L.stage = 'done'; L.shared = false; draw();
     }
   }
-  function onlySave() { save().then(() => { L.stage = 'done'; draw(); }, () => {}); }
+  function onlySave() { if (L.ai === 'busy' || !String(L.item || '').trim()) { L.err = L.ai === 'busy' ? 'AI 판독이 끝나면 접수할 수 있어요.' : '품목을 적어 주세요.'; draw(); return; } save().then(() => { L.stage = 'done'; draw(); }, () => {}); }
 
   // ---------- 그리기
   function draw() {
@@ -223,9 +232,12 @@ export function setupLost(ctx) {
           (L.voice === 'on' ? '<p class="lf-voice on">🎤 듣고 있어요… "천삼백오호"처럼 말해 주세요</p>' : L.voice ? '<p class="lf-voice">' + esc(L.voice) + '</p>' : '');
       }
     } else if (L.stage === 'card') {
-      h += '<div class="lf-card">' + (L.card ? '<img src="' + L.card.url + '" alt="접수 카드">' : '<p class="lf-note" style="padding:20px">카드를 만드는 중…</p>') + '</div>' +
-        '<button class="lf-kakao" data-lf="share"' + (L.card && L.room ? '' : ' disabled') + '>💬 카카오톡으로 공유</button>' +
-        '<p class="lf-note">카카오톡 → <b>룸메이드 단톡방</b>을 골라 주세요. 글도 복사돼 있어요.</p>' + aiLine +
+      const wait = L.ai === 'busy' ? '<div class="lf-wait"><i></i><div>🤖 AI가 품목을 판독하는 중이에요<small>잠시만요 · 끝나면 공유 버튼이 켜져요</small></div></div>'
+        : !String(L.item || '').trim() ? '<div class="lf-wait" style="animation:none"><div>✍ 품목을 적어 주세요<small>' + (L.aiSlow ? 'AI 판독이 늦어요' : 'AI가 사진을 못 읽었어요') + ' · 아래 "품목"에 적으면 공유 버튼이 켜져요</small></div></div>' : '';
+      const ok = ready();
+      h += wait + '<div class="lf-card">' + (L.card ? '<img src="' + L.card.url + '" alt="접수 카드">' : '<p class="lf-note" style="padding:20px">카드를 만드는 중…</p>') + '</div>' +
+        '<button class="lf-kakao' + (ok ? '' : ' wait') + '" data-lf="share"' + (ok ? '' : ' disabled') + '>' + (ok ? '💬 카카오톡으로 공유' : L.ai === 'busy' ? '⏳ 판독이 끝나면 공유할 수 있어요' : !String(L.item || '').trim() ? '품목을 적으면 공유할 수 있어요' : '⏳ 카드 만드는 중…') + '</button>' +
+        '<p class="lf-note">카카오톡 → <b>룸메이드 단톡방</b>을 골라 주세요. 글도 복사돼 있어요.</p>' + (L.ai === 'busy' ? '' : aiLine) +
         '<label class="lf-f"><span>품목 (틀리면 고쳐 주세요)</span><input id="lf-item" maxlength="40" value="' + esc(L.item) + '" placeholder="예: 무선 이어폰 (흰색)"></label>' +
         '<div class="lf-cats">' + CATS.map(c => '<button data-lf="cat" data-c="' + c + '" aria-pressed="' + (L.cat === c) + '">' + c + '</button>').join('') + '</div>' +
         '<label class="lf-ck"><input type="checkbox" id="lf-police"' + (L.police ? ' checked' : '') + '> 🚨 경찰 인계 대상 (카드 · 신분증 · 현금 · 고가품)</label>' +

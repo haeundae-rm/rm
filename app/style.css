@@ -680,10 +680,10 @@ body.gated #main,body.gated .top{filter:blur(5px);pointer-events:none;user-selec
 /* 🧳 습득물 접수 (2026-11-22) — 화면 전체를 덮는 창 (.lf 로 시작하는 이름만 씀: 공통 클래스와 안 겹치게) */
 .lf-btn{background:#C79A3B;border-color:#C79A3B;color:#fff;font-weight:900}
 .lf{position:fixed;inset:0;z-index:60;background:#F4F6F9;color:#111827;color-scheme:light;display:flex;flex-direction:column}
-.lf-top{display:flex;align-items:center;gap:10px;padding:12px 14px;background:#10233F;color:#fff;padding-top:calc(12px + env(safe-area-inset-top))}
+.lf-top{display:flex;align-items:center;gap:10px;padding:12px 14px;background:#10233F;color:#fff;padding-top:calc(12px + max(env(safe-area-inset-top), 34px))}
 .lf-top b{flex:1;font-size:18px;font-weight:900}
 .lf-x{min-width:48px;min-height:48px;border:0;border-radius:12px;background:rgba(255,255,255,.14);color:#fff;font-size:22px;font-weight:900}
-.lf-body{flex:1;overflow:auto;padding:14px 14px calc(28px + env(safe-area-inset-bottom));display:flex;flex-direction:column;gap:12px;max-width:560px;width:100%;margin:0 auto}
+.lf-body{flex:1;overflow:auto;padding:14px 14px calc(28px + max(env(safe-area-inset-bottom), 56px));display:flex;flex-direction:column;gap:12px;max-width:560px;width:100%;margin:0 auto}
 .lf-body h3{margin:4px 0 0;font-size:20px;font-weight:900}
 .lf-ph{display:flex;gap:8px}
 .lf-ph>div{position:relative;width:96px;height:96px;border-radius:14px;overflow:hidden;background:#fff}
@@ -721,14 +721,14 @@ body.gated #main,body.gated .top{filter:blur(5px);pointer-events:none;user-selec
 /* 📷 습득물 앱 안 카메라 (2026-11-22 오후) */
 .lcam{position:fixed;inset:0;z-index:70;background:#000;color:#fff;display:flex;flex-direction:column}
 .lcam video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
-.lc-top{position:relative;z-index:2;background:rgba(16,35,63,.88);padding:calc(14px + env(safe-area-inset-top)) 16px 12px;display:flex;flex-direction:column;gap:2px;border-bottom:3px solid #C79A3B}
+.lc-top{position:relative;z-index:2;background:rgba(16,35,63,.88);padding:calc(14px + max(env(safe-area-inset-top), 34px)) 16px 12px;display:flex;flex-direction:column;gap:2px;border-bottom:3px solid #C79A3B}
 .lc-top b{font-size:19px;font-weight:900}.lc-top span{font-size:14px;opacity:.85}
 .lc-box{position:relative;z-index:1;flex:1;margin:12% 10%;pointer-events:none}
 .lc-box i{position:absolute;width:44px;height:44px;border:4px solid #FEE500}
 .lc-box i:nth-child(1){top:0;left:0;border-right:0;border-bottom:0;border-radius:12px 0 0 0}.lc-box i:nth-child(2){top:0;right:0;border-left:0;border-bottom:0;border-radius:0 12px 0 0}
 .lc-box i:nth-child(3){bottom:0;left:0;border-right:0;border-top:0;border-radius:0 0 0 12px}.lc-box i:nth-child(4){bottom:0;right:0;border-left:0;border-top:0;border-radius:0 0 12px 0}
 .lcam:not(.live) .lc-box{opacity:.35}
-.lc-bar{position:relative;z-index:2;display:flex;align-items:center;justify-content:space-around;padding:16px 12px calc(22px + env(safe-area-inset-bottom));background:rgba(0,0,0,.55)}
+.lc-bar{position:relative;z-index:2;display:flex;align-items:center;justify-content:space-around;padding:16px 12px calc(18px + max(env(safe-area-inset-bottom), 56px));background:rgba(0,0,0,.55)}
 .lc-shot{width:78px;height:78px;border-radius:50%;border:5px solid #fff;background:#FEE500;box-shadow:0 0 0 3px rgba(0,0,0,.35)}
 .lc-shot:active{transform:scale(.94)}.lcam:not(.live) .lc-shot{opacity:.4}
 .lc-side{min-width:64px;min-height:64px;border:0;border-radius:16px;background:rgba(255,255,255,.14);color:#fff;font-size:24px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px}
@@ -739,3 +739,9 @@ body.gated #main,body.gated .top{filter:blur(5px);pointer-events:none;user-selec
 .lcam.fail .lc-fail{position:absolute;z-index:3;left:16px;right:16px;top:40%;transform:translateY(-50%);display:flex;flex-direction:column;gap:8px;background:#fff;color:#111827;border-radius:18px;padding:18px;text-align:center}
 .lc-fail b{font-size:18px}.lc-fail span{font-size:14px;color:#4B5563}
 .lc-fail button{min-height:58px;border:0;border-radius:14px;background:#1D3A6E;color:#fff;font-size:17px;font-weight:900}
+/* 🤖 판독 중 띠 (11/22 오후: 판독 전에 공유하면 품목이 빈 채로 올라감 → 판독 끝나야 공유) */
+.lf-wait{display:flex;align-items:center;gap:12px;padding:14px 16px;border-radius:16px;background:#FFF4E0;border:2px solid #F0C27A;color:#7A3A06;font-weight:900;font-size:17px}
+.lf-wait i{width:26px;height:26px;border-radius:50%;border:4px solid #F0C27A;border-top-color:#C25A00;animation:lfspin .8s linear infinite;flex-shrink:0}
+.lf-wait small{display:block;font-size:13px;font-weight:700;color:#8A5A00}
+@keyframes lfspin{to{transform:rotate(360deg)}}
+.lf-kakao.wait{background:#E5E7EB;color:#6B7280}
