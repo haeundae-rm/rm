@@ -6,9 +6,10 @@ import { makeLeaveApi } from './leave_my.js';
 import { setupVoc } from './voc.js';
 import * as K from './keys.js';   // 🔑 플로어키 서명 (2026-11-19)
 import { setupDreq } from './dreq.js';   // 🔔 더티 요청 (2026-11-21)
+import { setupLost } from './lost.js';   // 🧳 습득물 접수 (2026-11-22)
 import { setupSync } from './rsync.js';   // 📄 정비보고서 연결 (2026-11-21): 오더테이커 PC 엑셀 → 바뀐 방만 앱에
 
-const APP_VER = '2026.11.22-3';
+const APP_VER = '2026.11.22-4';
 // 관리자 = 보안 규칙 isAdmin 과 같은 목록 (UID 는 공개돼도 되는 값)
 const ADMINS = [
   { uid: 'iw2orXgIgPgTbLUQa0b41XJ9Dvd2', label: '소장', email: 'unieshaeundae+admin@gmail.com' },
@@ -428,11 +429,11 @@ function render() {
     if (viewMaid && maidOf(viewMaid)) renderMaid(adminView(viewMaid), true); else { viewMaid = null; renderAdmin(); }
   } else if (!me) { $('#bar').innerHTML = ''; renderPicker(); }
   else if (data.noPlan) {
-    $('#bar').innerHTML = '<div class="mebar"><span class="mechip">' + esc(meLabel()) + ' 님</span>' + noticeBtn(me) + lunchBtn() + sndBtn() + '</div>';
+    $('#bar').innerHTML = '<div class="mebar"><span class="mechip">' + esc(meLabel()) + ' 님</span>' + noticeBtn(me) + LF.btn() + lunchBtn() + sndBtn() + '</div>';
     $('#main').innerHTML = bands() + instHtml() + '<div class="notice"><strong>오늘 배정은 아직 준비 중이에요.</strong><br>' + esc(data.label) + ' 배정은 오전 8시 30분에 올라와요.<br>화면을 켜 두면 올라오는 대로 객실이 자동으로 나타나요.</div><button class="foot" data-admin-in="1">관리자 메뉴</button>';
   } else {
     const m = data.maids[0] || null;
-    $('#bar').innerHTML = '<div class="mebar"><span class="mechip">' + esc(meLabel()) + ' 님</span>' + noticeBtn(me) + lunchBtn() + sndBtn() + '</div>';
+    $('#bar').innerHTML = '<div class="mebar"><span class="mechip">' + esc(meLabel()) + ' 님</span>' + noticeBtn(me) + LF.btn() + lunchBtn() + sndBtn() + '</div>';
     if (m) renderMaid(m, false);
     else $('#main').innerHTML = bands() + '<div class="notice"><strong>오늘 ' + esc(meLabel()) + ' 님 배정 객실이 없어요.</strong><br>휴무이거나 배정이 아직 올라오지 않았어요.</div><button class="foot" data-admin-in="1">관리자 메뉴</button>';
   }
@@ -1050,6 +1051,7 @@ function errP() { return dlg.err ? '<p class="err">' + esc(dlg.err) + '</p>' : '
 function drawDlg() {
   const el = $('#sheet');
   if (dlg && dlg.kind === 'mywork') { MW.draw(); return; }
+  if (dlg && dlg.kind === 'lost') { if (!document.querySelector('#sheet .lf')) LF.draw(); return; }   // 🧳 습득물 창은 스스로 그림 (적는 중에 다시 그려 지워지지 않게)
   if (!dlg || !data) { el.innerHTML = ''; return; }
   const k = dlg.kind; let body = '', cls = 'panel';
   if (k === 'room') {
@@ -1124,6 +1126,7 @@ function drawDlg() {
 }
 function closeDlg() {
   if (dlg && dlg.kind === 'mywork') { if (MW.back()) return; dlg = null; drawDlg(); MW.closed(); return; }
+  if (dlg && dlg.kind === 'lost') { if (LF.back()) return; LF.closed(); dlg = null; drawDlg(); return; }
   const wasN = dlg && dlg.kind === 'notice'; if (wasN) seenPopup[dlg.n.id] = 1; dlg = null; drawDlg(); if (wasN) maybePopup(); }
 function failDlg(e) { busy = false; if (dlg) { dlg.err = e && e.message ? e.message.replace(/^Error:\s*/, '') : errText(e); drawDlg(); } }
 
@@ -1162,6 +1165,8 @@ document.addEventListener('click', e => {
   if (at('[data-snd]')) { const on = !soundOn(); lsSet('rm_sound', on ? 'on' : 'off'); render(); toast(on ? '소리를 켰어요 🔊' : '소리를 껐어요 · 진동만 울려요'); if (on) play('stamp'); return; }
   if (at('[data-reload]')) { const u = new URL(location.href); u.searchParams.set('r', newVer || Date.now()); location.replace(u.href); return; }   // 11/18: 주소를 바꿔 열어야 휴대폰에 남은 옛 화면(10분 캐시)을 건너뜀
   if (at('[data-failx]')) { lsSet(failKey(), JSON.stringify(lsJson(failKey(), []).filter(f => f.date !== today))); update(); return; }
+  const lfb = at('[data-lf]'); if (lfb) { LF.click(lfb.getAttribute('data-lf'), lfb); return; }   // 🧳 습득물 창
+  if (at('[data-lostbtn]') && !isAdm && me) { LF.pick(); return; }
   if (at('#sheet')) { onSheet(t, at); return; }
   if (!data) return;
   const pk = at('[data-pick]'); if (pk) { dlg = { kind: 'claim', name: pk.getAttribute('data-pick'), label: pk.getAttribute('data-label') || pk.getAttribute('data-pick') }; drawDlg(); return; }
@@ -1542,6 +1547,8 @@ const RS = setupSync({ S, esc, say, pick: PICK, report: (w, m) => report(w, m),
   isAdm: () => isAdm, who: () => (ADMINS.filter(a => isAdmUser(a, user))[0] || {}).label || '',
   render: () => { if (isAdm && data && admTab === 'link' && !viewMaid && !dlg) { const y = window.scrollY; render(); window.scrollTo(0, y); } } });
 const leaveCall = makeLeaveApi(S, () => user && user.uid);   // 2026-11-18 연차 Firebase 전환 (옛 callOld 대신)
+const LF = setupLost({ S, esc, me: () => me, uid: () => (user && user.uid) || '', today: () => today, dlg: () => dlg, setDlg: d => { dlg = d; }, closeDlg: () => { dlg = null; drawDlg(); },
+  myRooms: () => { const m = data && data.maids && data.maids[0]; if (!m || isAdm) return []; return m.rooms.map((x, i) => { const r = recOf(x.own || m.name, x.room); return { room: x.room, i, at: r && (r.status === '완료' || r.status === '이상') ? Number(r.at) || 1 : 0 }; }); } });
 const MW = setupMyWork({ esc, lsGet, lsSet, toast, vibe, call: (fn, a, as) => leaveCall(fn, a, as, me), me: () => me, mate: () => mateOf(me), pair: () => { const mt = mateOf(me); return (teamPairs.filter(p => p.indexOf(me) >= 0)[0] || [me, mt]).slice(); }, isAdm: () => isAdm, dlg: () => dlg, setDlg: d => { dlg = d; }, closeDlg: () => closeDlg() });
 
 // =====================================================================
