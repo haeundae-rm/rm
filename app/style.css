@@ -718,3 +718,24 @@ body.gated #main,body.gated .top{filter:blur(5px);pointer-events:none;user-selec
 .lf-err{margin:0;color:#B23A48;font-weight:800;font-size:14px}
 .lf-done{background:#E8F5EC;border-radius:16px;padding:14px;display:flex;flex-direction:column;gap:4px}
 .lf-done b{font-size:19px;color:#1E8E3E}.lf-done span{font-size:14px}.lf-done i{font-style:normal;font-weight:900;font-size:18px}
+/* 📷 습득물 앱 안 카메라 (2026-11-22 오후) */
+.lcam{position:fixed;inset:0;z-index:70;background:#000;color:#fff;display:flex;flex-direction:column}
+.lcam video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+.lc-top{position:relative;z-index:2;background:rgba(16,35,63,.88);padding:calc(14px + env(safe-area-inset-top)) 16px 12px;display:flex;flex-direction:column;gap:2px;border-bottom:3px solid #C79A3B}
+.lc-top b{font-size:19px;font-weight:900}.lc-top span{font-size:14px;opacity:.85}
+.lc-box{position:relative;z-index:1;flex:1;margin:12% 10%;pointer-events:none}
+.lc-box i{position:absolute;width:44px;height:44px;border:4px solid #FEE500}
+.lc-box i:nth-child(1){top:0;left:0;border-right:0;border-bottom:0;border-radius:12px 0 0 0}.lc-box i:nth-child(2){top:0;right:0;border-left:0;border-bottom:0;border-radius:0 12px 0 0}
+.lc-box i:nth-child(3){bottom:0;left:0;border-right:0;border-top:0;border-radius:0 0 0 12px}.lc-box i:nth-child(4){bottom:0;right:0;border-left:0;border-top:0;border-radius:0 0 12px 0}
+.lcam:not(.live) .lc-box{opacity:.35}
+.lc-bar{position:relative;z-index:2;display:flex;align-items:center;justify-content:space-around;padding:16px 12px calc(22px + env(safe-area-inset-bottom));background:rgba(0,0,0,.55)}
+.lc-shot{width:78px;height:78px;border-radius:50%;border:5px solid #fff;background:#FEE500;box-shadow:0 0 0 3px rgba(0,0,0,.35)}
+.lc-shot:active{transform:scale(.94)}.lcam:not(.live) .lc-shot{opacity:.4}
+.lc-side{min-width:64px;min-height:64px;border:0;border-radius:16px;background:rgba(255,255,255,.14);color:#fff;font-size:24px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px}
+.lc-side span{font-size:12px;font-weight:800}
+.lc-flash{position:absolute;inset:0;z-index:3;background:#fff;opacity:0;pointer-events:none}.lc-flash.on{animation:lcf .25s ease-out}
+@keyframes lcf{from{opacity:.85}to{opacity:0}}
+.lc-fail{display:none}
+.lcam.fail .lc-fail{position:absolute;z-index:3;left:16px;right:16px;top:40%;transform:translateY(-50%);display:flex;flex-direction:column;gap:8px;background:#fff;color:#111827;border-radius:18px;padding:18px;text-align:center}
+.lc-fail b{font-size:18px}.lc-fail span{font-size:14px;color:#4B5563}
+.lc-fail button{min-height:58px;border:0;border-radius:14px;background:#1D3A6E;color:#fff;font-size:17px;font-weight:900}
