@@ -29,7 +29,9 @@ export function setCfg(c) { cfg = c || {}; modelP = null; }
 
 async function getModel(name) {
   const [A, AI, AC] = await Promise.all([import(FB + 'firebase-app.js'), import(FB + 'firebase-ai.js'), import(FB + 'firebase-app-check.js')]);
-  const app = A.getApp();
+  // 체험 화면(demo)은 가짜 저장소라 Firebase 앱이 없음 → AI 판독만 하려고 진짜 앱을 하나 엶 (기록은 안 남음, 2026-11-22)
+  const app = A.getApps().length ? A.getApp() : A.initializeApp({ apiKey: 'AIzaSyCyESLB9lGONuwXQUWBz6hPw09u9Zq9yFQ', authDomain: 'haeundae-rm.firebaseapp.com', projectId: 'haeundae-rm',
+    storageBucket: 'haeundae-rm.firebasestorage.app', messagingSenderId: '468580994597', appId: '1:468580994597:web:b2c841463ec39b577679cc' });
   const key = (cfg && cfg.siteKey) || SITE_KEY;
   if (key && !window.__lostAppCheck) {
     const P = cfg && cfg.acType === 'v3' ? AC.ReCaptchaV3Provider : AC.ReCaptchaEnterpriseProvider;
