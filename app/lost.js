@@ -2,8 +2,8 @@
 //   [🧳 습득물] → 카메라 → 내 객실 버튼 한 번 (🎤 말하기 · 번호 입력 · 복도는 예비) → AI가 품목 · 분류 → 접수 카드 이미지 → [카카오톡으로 공유]
 //   저장: lost/{id} (대장 한 줄) + lost_img/{id} (사진, 대장에서 볼 때만 읽음). 허브 '🧳 습득물 관리대장'이 오더테이커 대장을 대신함 (규칙 v27)
 //   카톡은 웹에서 특정 방으로 바로 못 보냄 → 휴대폰 공유 창 → 카카오톡 → 룸메이드 단톡방 (단톡방을 맨 위에 고정해 두면 한 번)
-import { readLost, setCfg, CATS } from './lostai.js?v=2026.11.22-8';
-import { openLostCam, closeLostCam, camOk } from './lostcam.js?v=2026.11.22-8';   // 📷 앱 안 카메라 (안내 띠)
+import { readLost, setCfg, CATS } from './lostai.js?v=2026.11.25-1';
+import { openLostCam, closeLostCam, camOk } from './lostcam.js?v=2026.11.25-1';   // 📷 앱 안 카메라 (안내 띠)
 
 const MAXP = 3;
 const PLACE = { 귀중품: '귀중품 보관함', 음식: '습득물 냉장고', 파손주의: '파손주의 보관함' };
@@ -205,8 +205,10 @@ export function setupLost(ctx) {
       try { if (navigator.clipboard) navigator.clipboard.writeText(text).catch(() => {}); } catch (e) {}
       navigator.share({ files: [file], text }).then(() => { L.shared = true; L.stage = 'done'; draw(); }, e => { if (e && e.name === 'AbortError') { L.err = ''; draw(); return; } L.err = '공유 창을 열지 못했어요. 아래 [사진 저장]으로 받아 카톡에 올려 주세요.'; draw(); });
     } else {
+      // 11/25: 카톡 안 창(카카오톡에서 링크로 연 화면) 등 '사진 공유'를 못 하는 브라우저 → 사진으로 저장하고 보내는 방법을 안내
+      try { if (navigator.clipboard) navigator.clipboard.writeText(text).catch(() => {}); } catch (e) {}
       const a = document.createElement('a'); a.href = L.card.url; a.download = file.name; document.body.appendChild(a); a.click(); a.remove();
-      L.stage = 'done'; L.shared = false; draw();
+      L.stage = 'done'; L.shared = false; L.dlTip = true; draw();
     }
   }
   function onlySave() { if (L.ai === 'busy' || !String(L.item || '').trim()) { L.err = L.ai === 'busy' ? 'AI 판독이 끝나면 접수할 수 있어요.' : '품목을 적어 주세요.'; draw(); return; } save().then(() => { L.stage = 'done'; draw(); }, () => {}); }
@@ -248,6 +250,7 @@ export function setupLost(ctx) {
       h += '<div class="lf-done"><b>' + (L.saved ? '✅ 대장에 접수됐어요' : L.saving ? '⏳ 대장에 저장하는 중…' : '⚠ 아직 저장 안 됨') + '</b><span>접수번호 <i>' + esc(L.no || noOf()) + '</i> · 물건 봉투에 이 번호를 적어 주세요</span></div>' +
         (L.card ? '<div class="lf-card sm"><img src="' + L.card.url + '" alt="접수 카드"></div>' : '') +
         (L.err ? '<p class="lf-err">' + esc(L.err) + '</p>' : '') +
+        (L.dlTip ? '<p class="lf-tip">📥 ' + (/KAKAOTALK/i.test(navigator.userAgent) ? '카톡 안에서 연 화면은' : '이 휴대폰 화면은') + ' 바로 공유가 안 돼서 <b>사진으로 저장했어요</b>.<br>카톡 단톡방 → <b>＋</b> → <b>앨범</b>에서 방금 사진을 보내 주세요.</p>' : '') +
         (!L.saved && !L.saving ? '<button class="lf-go" data-lf="save">다시 저장</button>' : '') +
         '<div class="lf-row"><button class="lf-sub" data-lf="share">' + (L.shared ? '다시 공유' : '💬 카카오톡으로 공유') + '</button><button class="lf-sub" data-lf="dl">사진 저장</button></div>' +
         '<button class="lf-go" data-lf="next">🧳 하나 더 접수</button><button class="lf-sub" data-lf="close">닫기</button>';

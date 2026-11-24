@@ -716,6 +716,7 @@ body.gated #main,body.gated .top{filter:blur(5px);pointer-events:none;user-selec
 .lf-row{display:grid;grid-template-columns:1fr 1fr;gap:8px}
 .lf-note{margin:0;font-size:13px;color:#4B5563;line-height:1.5}
 .lf-err{margin:0;color:#B23A48;font-weight:800;font-size:14px}
+.lf-tip{margin:0;background:#FFF6D6;border:1px solid #F0D27A;border-radius:12px;padding:10px 12px;font-size:14px;line-height:1.55;color:#5B4300}
 .lf-done{background:#E8F5EC;border-radius:16px;padding:14px;display:flex;flex-direction:column;gap:4px}
 .lf-done b{font-size:19px;color:#1E8E3E}.lf-done span{font-size:14px}.lf-done i{font-style:normal;font-weight:900;font-size:18px}
 /* 📷 습득물 앱 안 카메라 (2026-11-22 오후) */
