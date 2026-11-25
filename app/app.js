@@ -6,10 +6,10 @@ import { makeLeaveApi } from './leave_my.js';
 import { setupVoc } from './voc.js';
 import * as K from './keys.js';   // 🔑 플로어키 서명 (2026-11-19)
 import { setupDreq } from './dreq.js';   // 🔔 더티 요청 (2026-11-21)
-import { setupLost } from './lost.js?v=2026.11.25-1';   // 🧳 습득물 접수 (2026-11-22)
+import { setupLost } from './lost.js?v=2026.11.25-2';   // 🧳 습득물 접수 (2026-11-22)
 import { setupSync } from './rsync.js';   // 📄 정비보고서 연결 (2026-11-21): 오더테이커 PC 엑셀 → 바뀐 방만 앱에
 
-const APP_VER = '2026.11.25-1';
+const APP_VER = '2026.11.25-2';
 // 관리자 = 보안 규칙 isAdmin 과 같은 목록 (UID 는 공개돼도 되는 값)
 const ADMINS = [
   { uid: 'iw2orXgIgPgTbLUQa0b41XJ9Dvd2', label: '소장', email: 'unieshaeundae+admin@gmail.com' },
@@ -472,7 +472,8 @@ function addMin(t, n) { const p = t.split(':'), v = Number(p[0]) * 60 + Number(p
 function timeLine(x, done) {
   if (!x.due && !x.after) return '';
   const txt = x.due && x.after ? hmK(x.after) + '~' + hmK(x.due) + ' 사이 정비' : x.due ? hmK(x.due) + '까지 우선정비' : hmK(x.after) + ' 이후 정비';
-  return '<span class="tl' + (done ? ' off' : '') + '">' + IC.clock + txt + '</span>';
+  // 11/25 소장님: 관리자는 빨간 시간 글자를 바로 눌러 고침 (정비보고서 고쳐 다시 올리지 않게) — 글자 모양은 그대로
+  return '<span class="tl' + (done ? ' off' : '') + '"' + (isAdm ? ' data-tinfo="1"' : '') + '>' + IC.clock + txt + '</span>';
 }
 function leftChip(x) {
   if (!x.due) return '';
@@ -1196,6 +1197,10 @@ document.addEventListener('click', e => {
   const vw = at('[data-view]'); if (vw) { viewMaid = vw.getAttribute('data-view'); render(); window.scrollTo(0, 0); return; }
   if (keyClick(at)) return;
   const rm = at('[data-room]');
+  if (rm && isAdm && viewMaid && at('[data-tinfo]')) {   // 11/25: 시간 글자 → 바로 '표시·시간 바꾸기'
+    const room = rm.getAttribute('data-room'), ow = ownerOf(room), m = maidOf(ow), x = m && roomOf(m, room);
+    if (x) { dlg = { kind: 'rinfo', maid: ow, room, tags: PICK.filter(k => x.tags.some(t => tagKey(t) === k)), after: x.after || '', due: x.due || '', note: infoDocs[x.room] ? x.note : noteRest(x) }; drawDlg(); return; }
+  }
   if (rm) {
     const room = rm.getAttribute('data-room');
     if (isAdm && viewMaid) { const ow = ownerOf(room); dlg = recOf(ow, room) ? { kind: 'room', maid: ow, room, proxy: true } : { kind: 'proxyask', maid: ow, room }; drawDlg(); return; }
