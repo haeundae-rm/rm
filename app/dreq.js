@@ -1,8 +1,7 @@
 // 🔔 더티 요청 (2026-11-21) — 메이드가 정비보조에게 바로 "더티 빨리 와 주세요"를 보냄 (오더테이커·관리자 전화 대신)
 // 남발 막기 (사용자 결정 11/21):
 //   ① 더티 대상이고 받을 더티(지원 수량 − 정비보조가 한 방)가 남아 있어야 함
-//   ② 그리고 둘 중 하나: 가) 10시 30분이 지남 (11/25 소장님 완화: 예전엔 '12시 지났는데 정비보조가 한 번도 안 옴')
-//                        나) 완료 안 한 남은 방 수 ≤ 남은 더티 수량 (더티 없이는 할 방이 없음) — 10시 30분 전에도 됨
+//   ② 10시 30분부터만 (11/25 소장님: 예전 '12시 지났는데 정비보조가 한 번도 안 옴 / 남은 방 ≤ 남은 더티'를 없애고 시간으로만)
 //   ※ 저장하는 why 는 규칙(v24)에 맞춰 그대로: 'noon' = 시간 기준(10:30 이후), 'left' = 남은 방 기준
 //   11/25: 누를 수 있으면 버튼이 켜지고(점등), 못 누르면 꺼진 버튼 + 언제부터인지 안내 — 휴대폰에 이미 있는 자료로 미리 셈(읽기 안 늘림), 누를 때 다시 확인
 //   ③ 한 번 누르면 20분 뒤에야 다시 (규칙에서도 막음 · 11/21 사용자: 1시간 → 20분)
@@ -67,10 +66,8 @@ export function judge(info, names, left, hm) {
   const R = Math.max(0, n - d), ws = ms.map(m => m.worker).filter((w, i, a) => a.indexOf(w) === i).slice(0, 2);
   const base = { n, d, dc, R, left, ws };
   if (R <= 0) return Object.assign(base, { ok: false, why: 'full', msg: '오늘 받을 더티 ' + n + '실을 다 받았어요.' });
-  if (left <= R) return Object.assign(base, { ok: true, why: 'left' });
-  if (hm >= OPEN) return Object.assign(base, { ok: true, why: 'noon' });   // 'noon' = 시간 기준 (규칙 값 그대로)
-  return Object.assign(base, { ok: false, why: 'wait',
-    msg: '더티 요청은 10시 30분부터 할 수 있어요. 그 전에는 남은 방 ' + left + '실이 남은 더티 ' + R + '실 이하일 때만 돼요.' });
+  if (hm < OPEN) return Object.assign(base, { ok: false, why: 'wait', msg: '더티 요청은 10시 30분부터 할 수 있어요.' });
+  return Object.assign(base, { ok: true, why: left <= R ? 'left' : 'noon' });   // 기록용 이름만 (규칙 값 그대로): left = 남은 방이 모두 더티 필요, noon = 그 밖
 }
 
 /** app.js 에 붙이기. g = 앱 상태 꺼내는 함수들 */
@@ -118,10 +115,9 @@ export function setupDreq(g) {
     if (mine.length) {
       const n = mine.reduce((a, x) => a + Number(x.n), 0), R = Math.max(0, n - Math.min(n, dirtyNow(m)));
       if (R <= 0) return { on: false, msg: '오늘 받을 더티 ' + n + '실을 다 받았어요.' };
-      if (left <= R) return { on: true, msg: '남은 방이 모두 더티가 필요해요. 지금 요청할 수 있어요.' };
     }
-    if (nowHM() >= OPEN) return { on: true, msg: '지금 요청할 수 있어요. 정비보조 휴대폰에 바로 떠요.' };
-    return { on: false, msg: '더티 요청은 <b>10시 30분</b>부터 할 수 있어요.' };
+    if (nowHM() < OPEN) return { on: false, msg: '더티 요청은 <b>10시 30분</b>부터 할 수 있어요.' };
+    return { on: true, msg: '지금 요청할 수 있어요. 정비보조 휴대폰에 바로 떠요.' };
   }
   function lightKey() { if (!lastM) return ''; const s = state(lastM); return s.st + '|' + live(lastM, s).on + '|' + (s.at ? mins(s.at) : ''); }
   function band(m) {
@@ -172,7 +168,7 @@ export function setupDreq(g) {
       b = '<h3>' + (j.why === 'cool' ? '조금만 기다려 주세요' : '지금은 더티 요청을 할 수 없어요') + '</h3>' +
         '<p>' + esc(dlg.err || j.msg || '') + '</p>' +
         (j.n ? '<div class="dq-nums"><span>받을 더티 <b>' + j.n + '</b>실</span><span>정비보조가 한 방 <b>' + j.d + '</b>실</span><span>남은 더티 <b>' + j.R + '</b>실</span><span>내 남은 방 <b>' + j.left + '</b>실</span></div>' : '') +
-        (j.why === 'wait' ? '<p class="hint">10시 30분이 되거나, 남은 방이 ' + j.R + '실 이하가 되면 누를 수 있어요.</p>' : '') +
+
         '<div class="acts"><button class="go" data-dqx="1">확인</button></div>';
     } else {
       b = '<h3>정비보조에게 더티를 요청할까요?</h3>' +
