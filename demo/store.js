@@ -13,6 +13,8 @@ function seed() {
   s['days/' + DAY + '/plans/예시 동료'] = { rooms: [1203, 1204, 1206].map(room) };
   s['days/' + DAY + '/plans/예시 메이드'] = { rooms: [2501, 2502].map(room) };
   s['devices/demo'] = { name: '체험 메이드', date: DAY };
+  // 11/25 🛏 더티 요청 체험: 아침 더티 배분에서 '예시 보조'가 체험 메이드 더티 3실 담당 → 10시 30분부터 버튼 켜짐
+  s['sup/' + DAY] = { date: DAY, src: 'demo', plan: [{ d: DAY, m: '체험 메이드', w: '예시 보조', n: 3, r: '1201,1202,1205' }] };
   s['meta/keys'] = { from: YDAY, on: true };
   // 어제 12층 A키를 가져가고 [키 반납 완료]를 안 누른 것으로 → 맨 위 '지난번 반납 확인' 안내 체험
   s['days/' + YDAY + '/keys/y1'] = { floor: 12, maid: '체험 메이드', key: 'A', reason: '', by: '본인', who: '', at: at(8, 30) - 864e5, clientAt: at(8, 30) - 864e5, uid: 'demo' };
@@ -21,7 +23,7 @@ function seed() {
   s['days/' + DAY + '/keychk/c1'] = { floor: 25, key: 'A', st: 'in', by: '하우스키퍼', at: at(12, 50), clientAt: at(12, 50) };
   return s;
 }
-const KEY = 'rm_demo_' + DAY;
+const KEY = 'rm_demo2_' + DAY;   // 11/25: 더티 요청 체험 자료 추가 → 새 이름으로 (예전 창 기록은 무시)
 let D; try { D = JSON.parse(sessionStorage.getItem(KEY) || 'null'); } catch (e) { D = null; }
 if (!D) D = seed();
 const keep = () => { try { sessionStorage.setItem(KEY, JSON.stringify(D)); } catch (e) {} };

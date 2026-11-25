@@ -1,13 +1,14 @@
 // 🔔 더티 요청 (2026-11-21) — 메이드가 정비보조에게 바로 "더티 빨리 와 주세요"를 보냄 (오더테이커·관리자 전화 대신)
 // 남발 막기 (사용자 결정 11/21):
 //   ① 더티 대상이고 받을 더티(지원 수량 − 정비보조가 한 방)가 남아 있어야 함
-//   ② 그리고 둘 중 하나: 가) 낮 12시가 지났는데 정비보조가 내 방을 한 번도 안 함
-//                        나) 완료 안 한 남은 방 수 ≤ 남은 더티 수량 (더티 없이는 할 방이 없음) — 12시 전에도 됨
+//   ② 10시 30분부터만 (11/25 소장님: 예전 '12시 지났는데 정비보조가 한 번도 안 옴 / 남은 방 ≤ 남은 더티'를 없애고 시간으로만)
+//   ※ 저장하는 why 는 규칙(v24)에 맞춰 그대로: 'noon' = 시간 기준(10:30 이후), 'left' = 남은 방 기준
+//   11/25: 누를 수 있으면 버튼이 켜지고(점등), 못 누르면 꺼진 버튼 + 언제부터인지 안내 — 휴대폰에 이미 있는 자료로 미리 셈(읽기 안 늘림), 누를 때 다시 확인
 //   ③ 한 번 누르면 20분 뒤에야 다시 (규칙에서도 막음 · 11/21 사용자: 1시간 → 20분)
 //   먼저 할 방은 메이드가 최대 2실 고름 (선택). 시간 정해진 방은 미리 골라 둠
 // 저장: sup/{날짜}/req/{메이드 이름} 하나를 덮어씀 (n = 오늘 몇 번째, hist = 지난 요청 시각). 정비보조가 그 메이드 방을 체크하면 정비보조 앱에서 저절로 꺼짐
 // 판단은 누를 때 한 번만 정비 지원 기록(sup/{날짜}, rows, rm)을 읽어서 함 — 메이드 휴대폰이 늘 구독하지 않게 (읽기 비용)
-export const COOL = 20 * 60e3, NOON = '12:00', MAXR = 2;
+export const COOL = 20 * 60e3, OPEN = '10:30', MAXR = 2;
 
 const num = v => { const n = typeof v === 'number' ? v : v instanceof Date ? v.getTime() : Date.parse(v); return isNaN(n) ? 0 : n; };
 const clean = v => String(v || '').replace(/\s+/g, ' ').trim().slice(0, 20);
@@ -65,10 +66,8 @@ export function judge(info, names, left, hm) {
   const R = Math.max(0, n - d), ws = ms.map(m => m.worker).filter((w, i, a) => a.indexOf(w) === i).slice(0, 2);
   const base = { n, d, dc, R, left, ws };
   if (R <= 0) return Object.assign(base, { ok: false, why: 'full', msg: '오늘 받을 더티 ' + n + '실을 다 받았어요.' });
-  if (left <= R) return Object.assign(base, { ok: true, why: 'left' });
-  if (hm >= NOON && dc === 0) return Object.assign(base, { ok: true, why: 'noon' });
-  return Object.assign(base, { ok: false, why: 'wait',
-    msg: '남은 방 ' + left + '실이 남은 더티 ' + R + '실보다 많아요. 더티 없이 할 수 있는 방부터 정비해 주세요.' });
+  if (hm < OPEN) return Object.assign(base, { ok: false, why: 'wait', msg: '더티 요청은 10시 30분부터 할 수 있어요.' });
+  return Object.assign(base, { ok: true, why: left <= R ? 'left' : 'noon' });   // 기록용 이름만 (규칙 값 그대로): left = 남은 방이 모두 더티 필요, noon = 그 밖
 }
 
 /** app.js 에 붙이기. g = 앱 상태 꺼내는 함수들 */
@@ -85,7 +84,7 @@ export function setupDreq(g) {
     if (!me) return;
     subs.push(S.listenDoc('sup/' + day + '/req/' + me, d => { reqDoc = d; g.update(); }, () => {}));
     subs.push(S.listenDoc('sup/' + day, d => { supPlan = d; g.update(); }, () => {}));   // 더티 대상인지만 봄 (문서 1개)
-    if (!tick) tick = setInterval(() => { if (reqDoc && document.visibilityState === 'visible') g.update(); }, 30000);   // 'N분째' 글자
+    if (!tick) tick = setInterval(() => { if ((reqDoc || supPlan) && document.visibilityState === 'visible' && lightKey() !== lastKey) g.update(); }, 30000);   // 'N분째' 글자 · 버튼 켜짐/꺼짐 (바뀔 때만 다시 그림)
   }
   function stop() { subs.forEach(f => { try { f(); } catch (e) {} }); subs = []; }
 
@@ -105,19 +104,38 @@ export function setupDreq(g) {
     return { st: came ? 'came' : 'wait', at, next, canAgain: Date.now() >= next, r };
   }
 
+  // 11/25 버튼 켜짐/꺼짐 미리 셈 — 아침 배분(sup/{날}, 이미 구독) + 내 방 더티 완료 표시로. 정확한 판단은 누를 때 check() 가 다시 함
+  let lastM = null, lastKey = '';
+  function live(m, s) {
+    if (s.st !== 'none' && !s.canAgain) return { on: false, msg: '다음 요청은 <b>' + hm(s.next) + '</b>부터 할 수 있어요.' };
+    const names = m.team && m.team.length ? m.team : [m.name];
+    const plan = supPlan && Array.isArray(supPlan.plan) ? supPlan.plan : [];
+    const mine = plan.filter(x => x && names.indexOf(String(x.m || '').trim()) >= 0 && clean(x.w) && Number(x.n) > 0);
+    const left = leftRooms(m).length;
+    if (mine.length) {
+      const n = mine.reduce((a, x) => a + Number(x.n), 0), R = Math.max(0, n - Math.min(n, dirtyNow(m)));
+      if (R <= 0) return { on: false, msg: '오늘 받을 더티 ' + n + '실을 다 받았어요.' };
+    }
+    if (nowHM() < OPEN) return { on: false, msg: '더티 요청은 <b>10시 30분</b>부터 할 수 있어요.' };
+    return { on: true, msg: '지금 요청할 수 있어요. 정비보조 휴대폰에 바로 떠요.' };
+  }
+  function lightKey() { if (!lastM) return ''; const s = state(lastM); return s.st + '|' + live(lastM, s).on + '|' + (s.at ? mins(s.at) : ''); }
   function band(m) {
     if (!m || !isTarget(m)) return '';
     const left = leftRooms(m).length;
     if (!left) return '';
-    const s = state(m);
+    const s = state(m), lv = live(m, s);
+    lastM = m; lastKey = s.st + '|' + lv.on + '|' + (s.at ? mins(s.at) : '');
     if (s.st === 'wait') {
       return '<div class="dreq on"><div class="dq-t">🔔 더티 요청함 · <b>' + (mins(s.at) ? mins(s.at) + '분째' : '방금') + '</b> 기다리는 중</div>' +
         '<p>' + hm(s.at) + '에 보냈어요' + (s.r.rooms && s.r.rooms.length ? ' · 먼저 할 방 <b>' + esc(s.r.rooms.join(', ')) + '</b>' : '') + '. 정비보조 휴대폰에 떠 있어요.</p>' +
-        (s.canAgain ? '<button class="dq-btn" data-dreq="1"' + (busy ? ' disabled' : '') + '>' + (busy ? '확인하는 중…' : '🔔 다시 알리기') + '</button>' : '<p class="dq-n">다시 알리기는 <b>' + hm(s.next) + '</b>부터 할 수 있어요.</p>') + '</div>';
+        (s.canAgain && lv.on ? '<button class="dq-btn lit" data-dreq="1"' + (busy ? ' disabled' : '') + '>' + (busy ? '확인하는 중…' : '🔔 다시 알리기') + '</button>'
+          : '<button class="dq-btn" disabled>🔔 다시 알리기</button><p class="dq-n">' + (s.canAgain ? lv.msg : '다시 알리기는 <b>' + hm(s.next) + '</b>부터 할 수 있어요.') + '</p>') + '</div>';
     }
     if (s.st === 'came' && !s.canAgain) return '<div class="dreq ok"><div class="dq-t">✓ 정비보조가 더티를 시작했어요</div><p class="dq-n">다음 요청은 <b>' + hm(s.next) + '</b>부터 할 수 있어요.</p></div>';
-    return '<div class="dreq"><button class="dq-btn" data-dreq="1"' + (busy ? ' disabled' : '') + '>' + (busy ? '확인하는 중…' : '🛏 더티 요청하기') + '</button>' +
-      '<p class="dq-n">더티 끝난 방이 없어 기다릴 때 누르세요. 정비보조 휴대폰에 바로 떠요.</p></div>';
+    if (!lv.on) return '<div class="dreq off"><button class="dq-btn" disabled>🛏 더티 요청하기</button><p class="dq-n">' + lv.msg + '</p></div>';
+    return '<div class="dreq"><button class="dq-btn lit" data-dreq="1"' + (busy ? ' disabled' : '') + '>' + (busy ? '확인하는 중…' : '🛏 더티 요청하기') + '</button>' +
+      '<p class="dq-n">' + lv.msg + '</p></div>';
   }
 
   async function check(m) {
@@ -150,11 +168,11 @@ export function setupDreq(g) {
       b = '<h3>' + (j.why === 'cool' ? '조금만 기다려 주세요' : '지금은 더티 요청을 할 수 없어요') + '</h3>' +
         '<p>' + esc(dlg.err || j.msg || '') + '</p>' +
         (j.n ? '<div class="dq-nums"><span>받을 더티 <b>' + j.n + '</b>실</span><span>정비보조가 한 방 <b>' + j.d + '</b>실</span><span>남은 더티 <b>' + j.R + '</b>실</span><span>내 남은 방 <b>' + j.left + '</b>실</span></div>' : '') +
-        (j.why === 'wait' ? '<p class="hint">남은 방이 ' + j.R + '실 이하가 되면 누를 수 있어요. 낮 12시까지 정비보조가 한 번도 안 오면 그때도 누를 수 있어요.</p>' : '') +
+
         '<div class="acts"><button class="go" data-dqx="1">확인</button></div>';
     } else {
       b = '<h3>정비보조에게 더티를 요청할까요?</h3>' +
-        '<p>' + (j.why === 'noon' ? '낮 12시가 지났는데 아직 정비보조가 오지 않았어요.' : '남은 방 ' + j.left + '실이 모두 더티가 필요해요.') + ' <b>' + esc(j.ws.join(', ')) + '</b> 님 휴대폰에 바로 떠요.</p>' +
+        '<p>' + (j.why === 'noon' ? '남은 더티 ' + j.R + '실을 빨리 받고 싶을 때 보내요.' : '남은 방 ' + j.left + '실이 모두 더티가 필요해요.') + ' <b>' + esc(j.ws.join(', ')) + '</b> 님 휴대폰에 바로 떠요.</p>' +
         '<h4 class="ih">먼저 해 줬으면 하는 방 (최대 ' + MAXR + '실, 안 골라도 돼요)</h4>' +
         '<div class="dq-rooms">' + dlg.cand.map(x => '<button data-dqr="' + esc(x.room) + '" aria-pressed="' + (dlg.pick.indexOf(x.room) >= 0) + '">' + esc(x.room) + (x.due ? '<small>' + esc(x.due) + '까지</small>' : '') + '</button>').join('') + '</div>' +
         (dlg.err ? '<p class="err">' + esc(dlg.err) + '</p>' : '') +
