@@ -1,4 +1,4 @@
-// 정비 레포트 서비스 워커 (⑤ 오프라인 열기, 2026-11-05)
+// 정비 레포트 서비스 워커 (⑤ 오프라인 열기, 2026-11-05 · 11/25 딸린 파일 매번 확인)
 // - 앱 화면 파일(index.html·app.js·style.css …)은 '인터넷 먼저': 연결되면 늘 새 파일을 받고(예전 화면이 남지 않게) 사본을 휴대폰에 저장
 //   인터넷이 끊겼거나 4초 넘게 응답이 없으면 저장해 둔 사본으로 열기 → 지하·엘리베이터에서도 앱이 열림
 // - Firebase 프로그램·글꼴(주소에 버전이 들어 있어 안 바뀜)은 '저장본 먼저'
@@ -36,7 +36,9 @@ function netFirst(e, req) {
   return new Promise(resolve => {
     let done = false;
     const fin = r => { if (!done && r) { done = true; resolve(r); } };
-    const net = fetch(req).then(res => keep(e, req, res));
+    // 11/25 안정화: 버전 표시(?v=) 없이 불리는 딸린 파일(store · keys · rsync …)도 매번 '바뀌었나'만 확인 (안 바뀌면 304 로 거의 데이터 안 씀)
+    //   → 업데이트 직후 10분 동안 새 app.js + 옛 딸린 파일이 섞여 도는 일 막음. 첫 화면(navigate) 요청은 옵션을 붙일 수 없어 그대로
+    const net = (req.mode === 'navigate' ? fetch(req) : fetch(req, { cache: 'no-cache' })).then(res => keep(e, req, res));
     e.waitUntil(net.catch(() => {}));
     const fallback = async () => { const c = await fromCache(req); if (c) fin(c); return c; };
     const t = setTimeout(fallback, WAIT);
