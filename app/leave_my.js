@@ -70,15 +70,34 @@ export function makeLeaveApi(S, uidOf) {
   }
 
   // ---------- 근무 달력
+  // 11/25: 배정 = 아침 정비보고서 배정 + 근무 중 변경(추가 · 제외 · 교환/넘김)을 반영한 최종 배정 (관리자 화면 '메이드별 현황'과 같은 기준)
+  //   예전엔 근무 중 빠진 방(제외 · 넘김)을 안 빼서 배정이 더 많게 보였음 (노애영 님 11/25: 최종 10실인데 11) → 지난 날짜 기억도 새로(rm_mw_day2_)
+  function applyChanges(name, rooms, docs) {
+    const L0 = docs.map(x => x.data || {}).sort((a, b) => (Number(a.clientAt || a.at) || 0) - (Number(b.clientAt || b.at) || 0) || (Number(a.at) || 0) - (Number(b.at) || 0));
+    const has = r => rooms.indexOf(r) >= 0, add = r => { if (r && !has(r)) rooms.push(r); }, del = r => { const i = rooms.indexOf(r); if (i >= 0) rooms.splice(i, 1); };
+    L0.forEach(c => {
+      const room = String(c.room || ''), maid = cleanName(c.maid);
+      if (c.kind === '교환') {   // 교환 한 건 = 서로 넘김 두 번 (maid 의 room ↔ to 의 toRoom)
+        const to = cleanName(c.to), toRoom = String(c.toRoom || '');
+        if (maid === name && has(room)) { del(room); add(toRoom); }
+        else if (to === name && has(toRoom)) { del(toRoom); add(room); }
+        return;
+      }
+      if (maid !== name) return;
+      if (c.kind === '추가') add(room); else if (c.kind === '제외') del(room);
+    });
+    return rooms;
+  }
   async function dayWork(name, d, today) {
-    const key = 'rm_mw_day_' + name + '_' + d;
+    const key = 'rm_mw_day2_' + name + '_' + d;
     if (d < today) { const c = lsG(key); if (c) return c.v; }
-    const [plan, recs] = await Promise.all([
+    const [plan, recs, chg] = await Promise.all([
       S.get('days/' + d + '/plans/' + name).catch(() => null),
-      S.getQuery('days/' + d + '/recs', [['maid', '==', name]]).catch(() => [])
+      S.getQuery('days/' + d + '/recs', [['maid', '==', name]]).catch(() => []),
+      S.getQuery('days/' + d + '/changes', [['parties', 'array-contains', name]]).catch(() => [])
     ]);
     let v = null;
-    const rooms = ((plan && plan.rooms) || []).map(x => String(x.room || x));
+    const rooms = applyChanges(name, ((plan && plan.rooms) || []).map(x => String(x.room || x)), chg || []);
     const done = {}; recs.forEach(x => { if (x.data.status === '완료' || x.data.status === '이상') done[x.data.room] = 1; });
     Object.keys(done).forEach(r => { if (rooms.indexOf(r) < 0) rooms.push(r); });   // 근무 중 받은 객실
     if (rooms.length) {
