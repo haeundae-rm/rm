@@ -6,10 +6,10 @@ import { makeLeaveApi } from './leave_my.js';
 import { setupVoc } from './voc.js';
 import * as K from './keys.js';   // 🔑 플로어키 서명 (2026-11-19)
 import { setupDreq } from './dreq.js';   // 🔔 더티 요청 (2026-11-21)
-import { setupLost } from './lost.js?v=2026.11.25-7';   // 🧳 습득물 접수 (2026-11-22)
+import { setupLost } from './lost.js?v=2026.11.26-1';   // 🧳 습득물 접수 (2026-11-22)
 import { setupSync } from './rsync.js';   // 📄 정비보고서 연결 (2026-11-21): 오더테이커 PC 엑셀 → 바뀐 방만 앱에
 
-const APP_VER = '2026.11.25-7';
+const APP_VER = '2026.11.26-1';
 // 관리자 = 보안 규칙 isAdmin 과 같은 목록 (UID 는 공개돼도 되는 값)
 const ADMINS = [
   { uid: 'iw2orXgIgPgTbLUQa0b41XJ9Dvd2', label: '소장', email: 'unieshaeundae+admin@gmail.com' },
@@ -1211,9 +1211,13 @@ document.addEventListener('click', e => {
     }
   }
 });
+// 11/26 오류 보고: 입력칸에서 글자를 드래그하다 바깥(어두운 배경)에서 손을 떼면 click 이 배경으로 가서 창이 닫혔음
+//   → 배경(scrim)은 누르기 시작한 곳도 배경일 때만 닫음
+let downOnScrim = false;
+document.addEventListener('pointerdown', e => { downOnScrim = !!(e.target && e.target.classList && e.target.classList.contains('scrim')); }, true);
 function onSheet(t, at) {
   if (busy) return;
-  if (t.getAttribute('data-x') === '1') { closeDlg(); return; }
+  if (t.getAttribute('data-x') === '1') { if (t.classList.contains('scrim') && !downOnScrim) return; closeDlg(); return; }
   const os = at('[data-inst-os]'); if (os && dlg && dlg.kind === 'instguide') { dlg.os = os.getAttribute('data-inst-os'); drawDlg(); return; }
   if (at('[data-inst-poster]')) { const pn = instPoster(dlg.os); if (pn) openNotice(pn, false); return; }
   const wh = at('[data-who]'); if (wh && dlg && dlg.kind === 'login') { const pw = $('#apw'); dlg.pw = pw ? pw.value : ''; dlg.who = Number(wh.getAttribute('data-who')); drawDlg(); return; }
