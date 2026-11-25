@@ -655,7 +655,12 @@ body.gated #main,body.gated .top{filter:blur(5px);pointer-events:none;user-selec
 .dreq p{margin:0;font-size:14px;color:var(--muted)}
 .dreq .dq-t{font:900 17px var(--f-body);color:var(--ink)}
 .dreq .dq-btn{min-height:54px;border:0;border-radius:12px;background:var(--t-room);color:#fff;font:900 18px var(--f-body);cursor:pointer}
-.dreq .dq-btn:disabled{opacity:.6}
+.dreq .dq-btn:disabled{opacity:1;background:#D7DCE3;color:#7A8494;cursor:default;box-shadow:none}
+.dreq .dq-btn.lit{background:#E8710A;box-shadow:0 0 0 4px rgba(232,113,10,.22);animation:dqlit 2s ease-in-out infinite}
+.dreq .dq-btn.lit:disabled{animation:none;opacity:.7}
+@keyframes dqlit{0%,100%{box-shadow:0 0 0 4px rgba(232,113,10,.22)}50%{box-shadow:0 0 0 9px rgba(232,113,10,.10)}}
+.dreq.off{border-color:var(--line)}
+@media (prefers-reduced-motion:reduce){.dreq .dq-btn.lit{animation:none}}
 .dreq.on{border-color:#E8710A;background:#FFF5EB}
 .dreq.on .dq-t b{color:#C25A00}
 .dreq.on .dq-btn{background:#E8710A}
