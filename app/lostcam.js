@@ -22,13 +22,42 @@ export function closeLostCam() {
   if (!st) return;
   halt(); st.el.remove(); document.removeEventListener('visibilitychange', st.vis); st = null;
 }
-async function grab() {
-  if (st.ic) { try { const b = await st.ic.takePhoto(); if (b && b.size) return b; } catch (e) { st.ic = null; } }
-  const v = st.el.querySelector('video'), w = v.videoWidth, h = v.videoHeight;
-  if (!w || !h) throw new Error('no frame');
-  const s = Math.min(1, 1920 / Math.max(w, h)), cv = document.createElement('canvas'); cv.width = Math.round(w * s); cv.height = Math.round(h * s);
-  cv.getContext('2d').drawImage(v, 0, 0, cv.width, cv.height);
+// 11/25 소장님: "찍을 땐 가깝게 보이는데 결과는 멀리 찍은 것처럼 나옴"
+//   화면은 카메라 영상을 꽉 채우려고 가장자리를 잘라 보여 줌(object-fit:cover) + takePhoto 는 센서 전체(더 넓게)를 찍음
+//   → 찍은 사진을 '노란 네모 안(+조금 여유)'으로 잘라서, 화면에서 본 크기 그대로 나오게 함
+const MARGIN = 0.06;   // 네모 바깥 여유 (네모 한 변의 6%)
+function cropOf(srcW, srcH) {
+  const v = st.el.querySelector('video'), box = st.el.querySelector('.lc-box');
+  const vr = v.getBoundingClientRect(), br = box.getBoundingClientRect();
+  if (!vr.width || !vr.height || !br.width || !br.height) return null;
+  const s = Math.max(vr.width / srcW, vr.height / srcH);           // 화면 1px = 원본 1/s px (cover)
+  const ox = (srcW * s - vr.width) / 2, oy = (srcH * s - vr.height) / 2;   // 화면 밖으로 잘린 만큼
+  const mx = br.width * MARGIN, my = br.height * MARGIN;
+  let x0 = (br.left - vr.left - mx + ox) / s, y0 = (br.top - vr.top - my + oy) / s;
+  let x1 = (br.right - vr.left + mx + ox) / s, y1 = (br.bottom - vr.top + my + oy) / s;
+  x0 = Math.max(0, x0); y0 = Math.max(0, y0); x1 = Math.min(srcW, x1); y1 = Math.min(srcH, y1);
+  return x1 - x0 > 50 && y1 - y0 > 50 ? { x: x0, y: y0, w: x1 - x0, h: y1 - y0 } : null;
+}
+function cut(src, srcW, srcH, cr) {
+  if (!cr) cr = { x: 0, y: 0, w: srcW, h: srcH };
+  const s = Math.min(1, 1920 / Math.max(cr.w, cr.h)), cv = document.createElement('canvas'); cv.width = Math.round(cr.w * s); cv.height = Math.round(cr.h * s);
+  cv.getContext('2d').drawImage(src, cr.x, cr.y, cr.w, cr.h, 0, 0, cv.width, cv.height);
   return new Promise(r => cv.toBlob(r, 'image/jpeg', 0.9));
+}
+async function grab() {
+  const v = st.el.querySelector('video'), w = v.videoWidth, h = v.videoHeight;
+  // 고화질 사진(takePhoto)은 영상과 가로세로 비율이 같을 때만 씀 (비율이 다르면 센서 잘린 위치를 알 수 없어 네모와 어긋남)
+  if (st.ic && w && h) {
+    try {
+      const b = await st.ic.takePhoto();
+      if (b && b.size) {
+        const bmp = await createImageBitmap(b);
+        if (Math.abs(bmp.width / bmp.height - w / h) < 0.02) { const k = bmp.width / w, cr = cropOf(w, h); return cut(bmp, bmp.width, bmp.height, cr && { x: cr.x * k, y: cr.y * k, w: cr.w * k, h: cr.h * k }); }
+      }
+    } catch (e) { st.ic = null; }
+  }
+  if (!w || !h) throw new Error('no frame');
+  return cut(v, w, h, cropOf(w, h));
 }
 function failUi(msg) {
   if (!st) return;
