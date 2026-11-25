@@ -78,6 +78,10 @@ export function setupDreq(g) {
   const hm = ms => { const d = new Date(ms); return ('0' + d.getHours()).slice(-2) + ':' + ('0' + d.getMinutes()).slice(-2); };
   const nowHM = () => hm(Date.now());
   const mins = ms => Math.max(0, Math.floor((Date.now() - ms) / 60000));
+  // 11/25: '다시 알리기'를 눌러도 처음 요청한 시각부터 'N분째' (정비 지원 화면과 같은 기준) — 이 휴대폰에 그날 처음 요청 시각을 기억
+  const FK = () => 'rm_dq_first_' + g.today() + '_' + (g.me() || '');
+  const firstGet = () => { try { return Number(localStorage.getItem(FK()) || 0); } catch (e) { return 0; } };
+  const firstSet = v => { try { localStorage.setItem(FK(), String(v)); } catch (e) {} };
 
   function listen(day, me, mate) {
     stop(); reqDoc = null; supPlan = null;
@@ -103,7 +107,8 @@ export function setupDreq(g) {
     // 11/25: 먼저 할 방(긴급 요청한 방)을 골랐으면 그 방이 모두 더티 끝나야 '왔어요' · 못 골랐으면 예전처럼 더티 방이 하나 늘면
     const pick = (r.rooms || []).filter(q => m.rooms.some(x => x.room === q)), left = pick.filter(q => !g.isDirty(q)).length;
     const came = pick.length ? left === 0 : dirtyNow(m) > (Number(r.dc) || 0), next = at + COOL;
-    return { st: came ? 'came' : 'wait', at, next, canAgain: Date.now() >= next, r, pick: pick.length, left };
+    const f = firstGet(), since = !came && f && f <= at ? f : at;   // 기다리는 중이면 처음 요청 시각부터
+    return { st: came ? 'came' : 'wait', at, since, next, canAgain: Date.now() >= next, r, pick: pick.length, left };
   }
 
   // 11/25 버튼 켜짐/꺼짐 미리 셈 — 아침 배분(sup/{날}, 이미 구독) + 내 방 더티 완료 표시로. 정확한 판단은 누를 때 check() 가 다시 함
@@ -121,17 +126,17 @@ export function setupDreq(g) {
     if (nowHM() < OPEN) return { on: false, msg: '더티 요청은 <b>10시 30분</b>부터 할 수 있어요.' };
     return { on: true, msg: '지금 요청할 수 있어요. 정비보조 휴대폰에 바로 떠요.' };
   }
-  function lightKey() { if (!lastM) return ''; const s = state(lastM); return s.st + '|' + live(lastM, s).on + '|' + (s.at ? mins(s.at) : '') + '|' + (s.left || 0); }
+  function lightKey() { if (!lastM) return ''; const s = state(lastM); return s.st + '|' + live(lastM, s).on + '|' + (s.since ? mins(s.since) : '') + '|' + (s.left || 0); }
   function band(m) {
     if (!m || !isTarget(m)) return '';
     const left = leftRooms(m).length;
     if (!left) return '';
     const s = state(m), lv = live(m, s);
-    lastM = m; lastKey = s.st + '|' + lv.on + '|' + (s.at ? mins(s.at) : '') + '|' + (s.left || 0);
+    lastM = m; lastKey = s.st + '|' + lv.on + '|' + (s.since ? mins(s.since) : '') + '|' + (s.left || 0);
     if (s.st === 'wait') {
       const part = s.pick && s.left < s.pick;   // 긴급 요청한 방 중 일부만 끝남 (정비 지원 화면과 같은 말)
-      return '<div class="dreq on"><div class="dq-t">' + (part ? '🔔 긴급 요청한 방이 <b>' + s.left + '개</b> 남았어요' : '🔔 더티 요청함 · <b>' + (mins(s.at) ? mins(s.at) + '분째' : '방금') + '</b> 기다리는 중') + '</div>' +
-        '<p>' + hm(s.at) + '에 보냈어요' + (s.r.rooms && s.r.rooms.length ? ' · 먼저 할 방 <b>' + esc(s.r.rooms.join(', ')) + '</b>' : '') + '. 정비보조 휴대폰에 떠 있어요.</p>' +
+      return '<div class="dreq on"><div class="dq-t">' + (part ? '🔔 긴급 요청한 방이 <b>' + s.left + '개</b> 남았어요' : '🔔 더티 요청함 · <b>' + (mins(s.since) ? mins(s.since) + '분째' : '방금') + '</b> 기다리는 중') + '</div>' +
+        '<p>' + (s.since < s.at ? '처음 ' + hm(s.since) + ' · 다시 알림 ' + hm(s.at) : hm(s.at) + '에 보냈어요') + (s.r.rooms && s.r.rooms.length ? ' · 먼저 할 방 <b>' + esc(s.r.rooms.join(', ')) + '</b>' : '') + '. 정비보조 휴대폰에 떠 있어요.</p>' +
         (s.canAgain && lv.on ? '<button class="dq-btn lit" data-dreq="1"' + (busy ? ' disabled' : '') + '>' + (busy ? '확인하는 중…' : '🔔 다시 알리기') + '</button>'
           : '<button class="dq-btn" disabled>🔔 다시 알리기</button><p class="dq-n">' + (s.canAgain ? lv.msg : '다시 알리기는 <b>' + hm(s.next) + '</b>부터 할 수 있어요.') + '</p>') + '</div>';
     }
@@ -189,11 +194,13 @@ export function setupDreq(g) {
     const d = dlg; if (!d || d.sending) return;
     d.sending = true; d.err = ''; draw();
     const me = g.me(), old = reqDoc && num(reqDoc.at) >= Date.parse(g.today() + 'T00:00:00+09:00') ? reqDoc : null;
+    const s0 = d.m ? state(d.m) : { st: 'none' }, keepFirst = s0.st === 'wait' ? (s0.since || s0.at) : 0;   // 아직 안 왔는데 다시 알리면 처음 시각 유지
     const hist = old ? (old.hist || []).concat([num(old.at)]).slice(-19) : [];
     const doc = { maid: me, names: d.names.slice(0, 2), ws: d.j.ws, rooms: d.pick.slice(0, MAXR), at: S.SERVER_TIME, n: old ? (Number(old.n) || 0) + 1 : 1, hist,
       why: d.j.why, left: d.j.left, R: d.j.R, dc: d.j.dc, uid: g.uid(), ver: g.ver };
     try {
       await g.withTimeout(S.set('sup/' + g.today() + '/req/' + me, doc), 10000, '저장이 늦어요');
+      firstSet(keepFirst || Date.now());
       dlg = null; draw(); g.vibe(60); toast('🔔 ' + d.j.ws.join(', ') + ' 님에게 더티 요청을 보냈어요');
     } catch (e) { d.sending = false; d.err = '보내지 못했어요. 인터넷을 확인하고 다시 눌러 주세요.'; draw(); }
     g.update();
