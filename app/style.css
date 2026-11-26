@@ -759,3 +759,10 @@ body.gated #main,body.gated .top{filter:blur(5px);pointer-events:none;user-selec
 .lf-wait small{display:block;font-size:13px;font-weight:700;color:#8A5A00}
 @keyframes lfspin{to{transform:rotate(360deg)}}
 .lf-kakao.wait{background:#E5E7EB;color:#6B7280}
+
+/* 11/26 휴대폰(글자 크게 포함): 관리자 탭 글자가 두세 줄로 꺾이던 것 → 한 줄로 옆으로 밀기 · PC 그대로 */
+@media (max-width:760px){
+  .atabs{display:flex;overflow-x:auto;scrollbar-width:none}
+  .atabs::-webkit-scrollbar{display:none}
+  .atabs button{flex:0 0 auto;white-space:nowrap;padding:0 14px}
+}
