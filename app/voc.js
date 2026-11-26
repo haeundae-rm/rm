@@ -39,9 +39,11 @@ export function parseVoc(text, today) {
     if (!l || l === head) return;
     if (/^\[.*(개선|불만|불편).*\]$|^[\[【].*(개선|불만).*[\]】]/.test(l)) { push(); kind = '개선'; cat = ''; return; }
     if (/^\[.*칭찬.*\]$|^[\[【].*칭찬.*[\]】]/.test(l)) { push(); kind = '칭찬'; cat = ''; return; }
-    const isItem = /^[-·•▪*]|^👏|^\d+[.)]\s/.test(l);
-    if (!isItem && /^(✔️|✔|☑️|✅|▶|■|◆|●)/.test(l)) { push(); cat = l.replace(/^(✔️|✔|☑️|✅|▶|■|◆|●)\s*/, '').trim(); return; }
-    if (isItem) { push(); cur = { kind, cat, text: l.replace(/^([-·•▪*]|👏|\d+[.)])\s*/, '') }; return; }
+    // 11/26 새 글 모양: '✔️ 내용(3010호, 11/24~25)' 처럼 ✔ 줄 자체가 한 건 (호수 · 날짜가 들어 있으면 분류 제목이 아니라 건으로 봄)
+    const mark = /^(✔️|✔|☑️|✅|▶|■|◆|●)/.test(l), markItem = mark && (/\d{3,4}\s*호/.test(l) || /\d{1,2}\s*\/\s*\d{1,2}\s*[~\-]/.test(l) || l.length > 40);
+    const isItem = /^[-·•▪*]|^👏|^\d+[.)]\s/.test(l) || markItem;
+    if (!isItem && mark) { push(); cat = l.replace(/^(✔️|✔|☑️|✅|▶|■|◆|●)\s*/, '').trim(); return; }
+    if (isItem) { push(); cur = { kind, cat: markItem ? '' : cat, text: l.replace(/^([-·•▪*]|👏|\d+[.)]|✔️|✔|☑️|✅|▶|■|◆|●)\s*/, '') }; return; }
     if (cur) cur.text += ' ' + l; else cur = { kind, cat, text: l };
   });
   push();
