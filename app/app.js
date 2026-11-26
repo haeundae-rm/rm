@@ -3,13 +3,14 @@
 import * as S from './store.js';
 import { setupMyWork } from './mywork.js';
 import { makeLeaveApi } from './leave_my.js';
-import { setupVoc } from './voc.js?v=2026.11.26-4';   // 11/26: ?v 붙임 (안 붙이면 고친 voc.js 대신 옛 파일을 계속 씀)
+import { setupVoc } from './voc.js?v=2026.11.26-5';   // 11/26: ?v 붙임 (안 붙이면 고친 voc.js 대신 옛 파일을 계속 씀)
 import * as K from './keys.js';   // 🔑 플로어키 서명 (2026-11-19)
 import { setupDreq } from './dreq.js';   // 🔔 더티 요청 (2026-11-21)
-import { setupLost } from './lost.js?v=2026.11.26-4';   // 🧳 습득물 접수 (2026-11-22)
+import { setupLost } from './lost.js?v=2026.11.26-5';   // 🧳 습득물 접수 (2026-11-22)
 import { setupSync } from './rsync.js';   // 📄 정비보고서 연결 (2026-11-21): 오더테이커 PC 엑셀 → 바뀐 방만 앱에
+import './autoreload.js?v=2026.11.26-5';   // 🔄 쉬는 순간 자동 새로고침 (2026-11-26) — window.AutoReload
 
-const APP_VER = '2026.11.26-4';
+const APP_VER = '2026.11.26-5';
 // 관리자 = 보안 규칙 isAdmin 과 같은 목록 (UID 는 공개돼도 되는 값)
 const ADMINS = [
   { uid: 'iw2orXgIgPgTbLUQa0b41XJ9Dvd2', label: '소장', email: 'unieshaeundae+admin@gmail.com' },
@@ -1586,10 +1587,13 @@ setInterval(() => {
 }, 30000);
 setInterval(() => { if (pendingCount() || dayCache) render(); }, 3000);
 window.addEventListener('online', update); window.addEventListener('offline', update);
-async function checkVer() {
-  try { const r = await fetch(new URL('version.json', import.meta.url).href + '?t=' + Date.now(), { cache: 'no-store' }); const j = await r.json(); if (j && j.v && j.v !== APP_VER && j.v !== newVer) { newVer = j.v; update(); } } catch (e) {}
-}
-checkVer(); setInterval(() => { if (document.visibilityState === 'visible') checkVer(); }, 5 * 60000);
-document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') { checkVer(); if (user && seoulDate() !== today) start(); } });
+// 새 버전 (11/26): 띠만 보여 주던 것 → 쉬는 순간 자동으로 새로 고침 (autoreload.js). 띠 · '새로 고침' 버튼은 그대로
+// 안 바꾸는 때: 창(dlg) 열림 · 작업 중(busy) · 저장 대기 · 정비보고서 연결 창(?link — 폴더 허락이 풀릴 수 있음)
+window.AutoReload.start({
+  key: 'rm', cur: APP_VER, url: new URL('version.json', import.meta.url).href,
+  safe: () => !LINK && !dlg && !busy && pendingCount() === 0,
+  onNew: v => { if (v !== newVer) { newVer = v; update(); } }
+});
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') { if (user && seoulDate() !== today) start(); } });
 if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
 window.__rm = { ver: APP_VER, state: () => ({ me, isAdm, today, data, recs, pend, devState }) };   // 시험·점검용
