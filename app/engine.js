@@ -111,7 +111,7 @@ function extractDay(ssXml, stylesXml, sheetXml) {
   const cards = [];
   for (const nr of [2, 5, 8, 11]) for (let ci = 2; ci < 35; ci += 2) {
     const L = colName(ci), nm = V(L + nr);
-    if (nm) { const mm = /^\s*(\d+)\]\s*(.+)/.exec(nm); cards.push({ label: nm, name: (mm ? mm[2] : nm).trim(), unit: V(L + (nr + 1)), actual: V(L + (nr + 2)) }); }
+    if (nm) { const mm = /^\s*(\d+)\]\s*(.+)/.exec(nm); cards.push({ label: nm, name: (mm ? mm[2] : nm).trim(), unit: V(L + (nr + 1)), actual: V(L + (nr + 2)), in: V(colName(ci + 1) + (nr + 2)) }); }   // in: IN 체크 (11/26 정비보고서 사본용)
   }
   function expandRooms(text) {
     const out = [];
@@ -148,7 +148,10 @@ function extractDay(ssXml, stylesXml, sheetXml) {
       if (/^\d{3,4}$/.test(r)) themes.push({ room: r, type: str(V(tt + row)).trim() });
     }
   }
-  return { rooms, cards, groups, themes };
+  // 11/26 정비보고서 사본: 엑셀이 계산해 둔 요약 칸 (앱 계산과 대조용)
+  const nv = a => { const v = V(a); return v === null || v === '' || isNaN(+v) ? null : +v; };
+  const xl = { '정비수': nv('AE16'), '로얄': nv('AE18'), '인원': nv('AE20'), '미정비': nv('AE24'), '재실': nv('AE28'), '간단': nv('AE30'), '총유닛': nv('E263') };
+  return { rooms, cards, groups, themes, xl };
 }
 
 // ---------- 객실 → 꼬리표·전달사항 (make_rm_rows.py)
@@ -295,6 +298,27 @@ const cmp3 = (a, b) => (a.due < b.due ? -1 : a.due > b.due ? 1 : a.room < b.room
 export const _test = { makeRows, toCsv };
 
 // ---------- 한 번에: 파일 바이트 + 날짜(YYYY-MM-DD) → { csv, sheet, summary }
+// 11/26 정비보고서 사본용: '설정' 시트 C12~C67 명단 (결산 = 이 명단 기준). 시트가 없으면 []
+export async function readRoster(bytes) {
+  const u8 = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes);
+  const z = zipIndex(u8);
+  const wb = await z.text('xl/workbook.xml'), rel = await z.text('xl/_rels/workbook.xml.rels');
+  const rmap = {};
+  for (const m of rel.matchAll(/<Relationship [^>]*>/g)) { const at = {}; for (const a of m[0].matchAll(/(\w+)="([^"]*)"/g)) at[a[1]] = a[2]; rmap[at.Id] = at.Target; }
+  const sh = [...wb.matchAll(/<sheet name="([^"]+)" sheetId="\d+"(?: state="\w+")? r:id="(rId\d+)"/g)].find(m => m[1] === '설정');
+  if (!sh) return [];
+  const ss = []; if (z.has('xl/sharedStrings.xml')) { let m; const re = /<si(?:\s[^>]*)?(?:\/>|>([\s\S]*?)<\/si>)/g; const x = nl(await z.text('xl/sharedStrings.xml')); while ((m = re.exec(x))) ss.push(tTexts(m[1] || '')); }
+  const x = nl(await z.text('xl/worksheets/sheet' + /sheet(\d+)\.xml/.exec(rmap[sh[2]])[1] + '.xml')), out = [];
+  let m; const re = /<c\b([^>]*?)(?:\/>|>([\s\S]*?)<\/c>)/g;
+  while ((m = re.exec(x))) {
+    const ref = attr(m[1], 'r') || '', mm = /^C(\d+)$/.exec(ref); if (!mm || +mm[1] < 12 || +mm[1] > 67) continue;
+    const ty = attr(m[1], 't'), v = child(m[2] || '', 'v'); let val = v ? v.text : null;
+    if (ty === 's' && val !== null) val = ss[parseInt(val, 10)]; else if (ty === 'inlineStr') val = tTexts(m[2] || '');
+    if (ty === 'str' && val !== null) val = String(val);
+    if (val !== null && String(val).trim()) out.push(String(val).trim());
+  }
+  return out;
+}
 export async function buildFromXlsx(bytes, date) {
   const u8 = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes);
   if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) throw new Error('날짜 형식이 이상합니다: ' + date);

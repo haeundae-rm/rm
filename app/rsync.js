@@ -115,6 +115,20 @@ export async function pickFile(dir, day) {
 
 const hm = ms => { if (!ms) return ''; const d = new Date(ms); return ('0' + d.getHours()).slice(-2) + ':' + ('0' + d.getMinutes()).slice(-2); };
 
+// 📋 정비보고서 사본 한 장 (엔진 결과 → jbr/{날}). 방 = [상태, 정비자, 메모1, 메모2, 완료 1/0, 연박(노랑) 1/0]
+export function snapOf(r, roster, day, file) {
+  const str = v => (v === null || v === undefined ? '' : String(v).trim());
+  const rr = {};
+  for (const x of r.data.rooms) {
+    const st = str(x.st).replace(/\.0$/, ''), nm = str(x.name) === '0' ? '' : str(x.name);
+    rr[x.room] = [st.slice(0, 20), nm.slice(0, 60), str(x.m1).slice(0, 60), str(x.m2).slice(0, 60), str(x.done) && str(x.done) !== '0' ? 1 : 0, String(x.st_fill || '').toUpperCase().endsWith('FFFF00') ? 1 : 0];
+  }
+  return { date: day, src: 'excel', file: String(file || '').slice(0, 80), rooms: r.data.rooms.map(x => String(x.room)), r: rr, xl: r.data.xl || {},
+    cards: r.data.cards.map(c => ({ n: str(c.name).slice(0, 20), u: str(c.unit).slice(0, 10), in: str(c.in) ? 1 : 0 })),
+    groups: r.data.groups.map(g => ({ name: str(g.name).slice(0, 40), time: str(g.time).slice(0, 20), rooms: g.rooms.join(',') })),
+    roster: (roster || []).slice(0, 80).map(x => String(x).slice(0, 20)) };
+}
+
 export function setupSync(ctx) {
   const { S, esc } = ctx;
   const tab = (() => { try { let t = sessionStorage.getItem('rm_rsync_tab'); if (!t) { t = Math.random().toString(36).slice(2, 10); sessionStorage.setItem('rm_rsync_tab', t); } return t; } catch (e) { return Math.random().toString(36).slice(2, 10); } })();
@@ -123,6 +137,19 @@ export function setupSync(ctx) {
   let dir = null, perm = 'none', hb = undefined, logDoc = undefined, take = false;
   let f0 = null, hash = '', since = 0, rows = null, sheetOk = true, msg = '', checkedAt = 0, stage = 'off';
   let pend = null, lastPlan = null, waitTill = 0, lastHb = { at: 0, sig: '' }, busy = false, test = null;
+  let snapSig = '', snapErr = false;
+
+  // 📋 정비보고서 사본 (11/26): 엑셀을 읽을 때마다 그날 전체(방 · 카드 · 단체 · 명단)를 jbr/{날} 에 → 허브 '정비보고서' 화면 · 결산
+  //   12/1부터 앱이 원본이 되면(src 'app') 엑셀 사본으로 덮지 않음. 내용이 같으면 안 씀
+  async function saveSnap(r, buf) {
+    let roster = []; try { roster = await (await ctx.engine()).readRoster(buf); } catch (e) {}
+    const snap = snapOf(r, roster, day, f0 ? f0.name : '');
+    const sig = JSON.stringify(snap); if (sig === snapSig) return;
+    const cur = await S.get('jbr/' + day).catch(() => null);
+    if (cur && cur.src === 'app') { snapSig = sig; return; }
+    await S.set('jbr/' + day, Object.assign(snap, { at: S.SERVER_TIME, by: ctx.who ? String(ctx.who() || '').slice(0, 20) : '' }));
+    snapSig = sig; snapErr = false;
+  }
 
   const draw = () => ctx.render();
   const logPath = () => 'uploads/rsync_' + day;
@@ -182,11 +209,12 @@ export function setupSync(ctx) {
       if (!c) { stage = 'wait'; msg = '폴더에 오늘(' + Number(day.slice(5, 7)) + '월 ' + Number(day.slice(8, 10)) + '일) 정비보고서 엑셀이 아직 없어요'; draw(); heartbeat(); return; }
       const changed = !f0 || f0.name !== c.name || f0.mt !== c.f.lastModified || f0.size !== c.f.size;
       if (changed) {
-        const r = await readRows(await c.f.arrayBuffer());
+        const buf = await c.f.arrayBuffer(), r = await readRows(buf);
         const h = JSON.stringify(r.rows.map(x => x.slice(1, 7)));
         const first = !f0;
         f0 = { name: c.name, mt: c.f.lastModified, size: c.f.size };
         sheetOk = r.summary.ok;
+        if (sheetOk) saveSnap(r, buf).catch(e => { if (!snapErr) console.warn('정비보고서 사본 저장 실패 (규칙 v32 게시 전이면 정상)', e); snapErr = true; });
         if (!sheetOk) { stage = 'stop'; msg = '양식 검사에서 다른 점: ' + r.summary.checks.filter(x => !x.ok).map(x => x.msg).join(' / '); rows = null; hash = ''; draw(); heartbeat(); return; }
         if (h !== hash) { hash = h; rows = r.rows; since = first && c.f.lastModified < Date.now() - STABLE_MS ? c.f.lastModified : Date.now(); }
       }
