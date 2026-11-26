@@ -2,8 +2,8 @@
 //   [🧳 습득물] → 카메라 → 내 객실 버튼 한 번 (🎤 말하기 · 번호 입력 · 복도는 예비) → AI가 품목 · 분류 → 접수 카드 이미지 → [카카오톡으로 공유]
 //   저장: lost/{id} (대장 한 줄) + lost_img/{id} (사진, 대장에서 볼 때만 읽음). 허브 '🧳 습득물 관리대장'이 오더테이커 대장을 대신함 (규칙 v27)
 //   카톡은 웹에서 특정 방으로 바로 못 보냄 → 휴대폰 공유 창 → 카카오톡 → 룸메이드 단톡방 (단톡방을 맨 위에 고정해 두면 한 번)
-import { readLost, setCfg, CATS } from './lostai.js?v=2026.11.26-5';
-import { openLostCam, closeLostCam, camOk } from './lostcam.js?v=2026.11.26-5';   // 📷 앱 안 카메라 (안내 띠)
+import { readLost, setCfg, CATS } from './lostai.js?v=2026.11.26-6';
+import { openLostCam, closeLostCam, camOk } from './lostcam.js?v=2026.11.26-6';   // 📷 앱 안 카메라 (안내 띠)
 
 const MAXP = 3;
 const PLACE = { 귀중품: '귀중품 보관함', 음식: '습득물 냉장고', 파손주의: '파손주의 보관함' };
