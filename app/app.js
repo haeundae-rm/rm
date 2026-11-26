@@ -3,14 +3,14 @@
 import * as S from './store.js';
 import { setupMyWork } from './mywork.js';
 import { makeLeaveApi } from './leave_my.js';
-import { setupVoc } from './voc.js?v=2026.11.26-6';   // 11/26: ?v 붙임 (안 붙이면 고친 voc.js 대신 옛 파일을 계속 씀)
+import { setupVoc } from './voc.js?v=2026.11.26-7';   // 11/26: ?v 붙임 (안 붙이면 고친 voc.js 대신 옛 파일을 계속 씀)
 import * as K from './keys.js';   // 🔑 플로어키 서명 (2026-11-19)
 import { setupDreq } from './dreq.js';   // 🔔 더티 요청 (2026-11-21)
-import { setupLost } from './lost.js?v=2026.11.26-6';   // 🧳 습득물 접수 (2026-11-22)
+import { setupLost } from './lost.js?v=2026.11.26-7';   // 🧳 습득물 접수 (2026-11-22)
 import { setupSync } from './rsync.js';   // 📄 정비보고서 연결 (2026-11-21): 오더테이커 PC 엑셀 → 바뀐 방만 앱에
-import './autoreload.js?v=2026.11.26-6';   // 🔄 쉬는 순간 자동 새로고침 (2026-11-26) — window.AutoReload
+import './autoreload.js?v=2026.11.26-7';   // 🔄 쉬는 순간 자동 새로고침 (2026-11-26) — window.AutoReload
 
-const APP_VER = '2026.11.26-6';
+const APP_VER = '2026.11.26-7';
 // 관리자 = 보안 규칙 isAdmin 과 같은 목록 (UID 는 공개돼도 되는 값)
 const ADMINS = [
   { uid: 'iw2orXgIgPgTbLUQa0b41XJ9Dvd2', label: '소장', email: 'unieshaeundae+admin@gmail.com' },

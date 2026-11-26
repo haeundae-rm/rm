@@ -121,7 +121,7 @@ export function snapOf(r, roster, day, file) {
   const rr = {};
   for (const x of r.data.rooms) {
     const st = str(x.st).replace(/\.0$/, ''), nm = str(x.name) === '0' ? '' : str(x.name);
-    rr[x.room] = [st.slice(0, 20), nm.slice(0, 60), str(x.m1).slice(0, 60), str(x.m2).slice(0, 60), str(x.done) && str(x.done) !== '0' ? 1 : 0, String(x.st_fill || '').toUpperCase().endsWith('FFFF00') ? 1 : 0];
+    rr[x.room] = [st.slice(0, 20), nm.slice(0, 60), str(x.m1).slice(0, 200), str(x.m2).slice(0, 200), str(x.done) && str(x.done) !== '0' ? 1 : 0, String(x.st_fill || '').toUpperCase().endsWith('FFFF00') ? 1 : 0];
   }
   return { date: day, src: 'excel', file: String(file || '').slice(0, 80), rooms: r.data.rooms.map(x => String(x.room)), r: rr, xl: r.data.xl || {},
     cards: r.data.cards.map(c => ({ n: str(c.name).slice(0, 20), u: str(c.unit).slice(0, 10), in: str(c.in) ? 1 : 0 })),
