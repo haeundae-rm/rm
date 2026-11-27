@@ -77,7 +77,7 @@ function maidOf(n) { return data ? data.maids.filter(m => m.name === n || (m.tea
 // 이 객실의 배정 주인 (조 화면에서 누가 받은 객실인지) — 기록은 이 이름으로 저장 → 실적 각자 그대로
 let shownM = null;   // 지금 그려진 메이드 화면 (조면 합친 것)
 // 🟣 늦은 퇴실 (11/27): 허브 정비보고서가 meta/late_{날}에 씀 { rooms: { 호실: { at, out, outAt, outHm } } } (규칙 그대로: meta 읽기 = 로그인한 누구나)
-//   내 방이 늦은 퇴실이면 보라 테두리 + '13:00 퇴실 예정 · 손님 계세요', 프런트가 퇴실을 누르면 소리 · 진동 · 알림 + 보라 띠 '퇴실됐어요 — 바로 정비'
+//   내 방이 늦은 퇴실이면 보라 테두리 + '13:00 퇴실 예정 · 손님 계세요', 프런트가 퇴실을 누르면 소리 · 진동 · 알림 + 보라 띠 '늦은 퇴실 손님이 퇴실하셨어요 — 정비 가능해요' (11/27 소장님: 바로 할 필요는 없어서 '가능'으로)
 let lateDoc = null;
 function recWho(m, x) { return x.own || m.name; }
 function ownerOf(room) { const m = (isAdm ? shownM : null) || (data && data.maids[0]); if (!m) return me; const x = m.rooms.filter(y => y.room === room)[0] || (m.removed || []).filter(y => y.room === room)[0]; return (x && x.own) || m.name || me; }
@@ -501,7 +501,7 @@ function roomCard(m, x, isTeam) {
   if (pop) justDone[key] = 2;
   const seal = r ? '<span class="seal"><i>CHECK</i><b>정비완료</b>' + (isAdm ? '<span>' + hm(r.at) + '</span>' : '<span class="ck">✔</span>') + '</span>' : '';
   return '<button class="room' + cls + pri + hot + ltCls + (pop ? ' pop' : '') + '" data-room="' + esc(x.room) + '"><span class="no">' + esc(x.room) + (isTeam && x.own ? '<span class="own">' + esc(shortName(x.own)) + '</span>' : '') + '</span><span class="mid">' +
-    (ltCls === ' late' ? '<span class="ltl">🟣 ' + (lt.at ? esc(lt.at) + ' 퇴실 예정' : '늦은 퇴실') + ' · 손님 계세요</span>' : ltCls ? '<span class="ltl go">🔔 ' + esc(lt.outHm || '') + ' 퇴실됐어요 · 바로 정비</span>' : '') +
+    (ltCls === ' late' ? '<span class="ltl">🟣 ' + (lt.at ? esc(lt.at) + ' 퇴실 예정' : '늦은 퇴실') + ' · 손님 계세요</span>' : ltCls ? '<span class="ltl go">🔔 ' + esc(lt.outHm || '') + ' 퇴실 · 정비 가능</span>' : '') +
     (!r && isDirty(x.room) ? '<span class="dt">' + IC.bed + '더티 완료</span>' : '') + timeLine(x, !!r) + (tagsHtml(x) ? '<span class="tags">' + tagsHtml(x) + '</span>' : '') +
     (nt ? '<span class="nt">' + esc(nt) + '</span>' : '') + (mm ? '<span class="mm">메모 · ' + esc(mm) + '</span>' : '') +
     (x.from ? '<span class="sw">↔ ' + esc(x.from) + ' 님과 교환한 객실</span>' : '') +
@@ -516,7 +516,7 @@ function lateMine(m) { return (m ? m.rooms : []).filter(x => !recOf(recWho(m, x)
 function lateBand(m) {
   const L = lateMine(m), wait = L.filter(y => !y[1].out), go = L.filter(y => y[1].out && lsGet(lateKey(y[0], y[1]) + '_ok') !== '1' && Date.now() - (y[1].outAt || 0) < 90 * 60000);
   let h = '';
-  if (go.length) h += '<div class="lateb go"><span class="vi">🔔</span><span class="vt"><b>' + go.map(y => esc(y[0])).join(' · ') + '호 퇴실됐어요</b>손님이 나가셨어요 — 바로 정비 시작해 주세요</span><button data-lateok="1">확인</button></div>';
+  if (go.length) h += '<div class="lateb go"><span class="vi">🔔</span><span class="vt"><b>' + go.map(y => esc(y[0])).join(' · ') + '호 늦은 퇴실 손님이 퇴실하셨어요</b>정비 가능해요</span><button data-lateok="1">확인</button></div>';
   if (wait.length) h += '<div class="lateb"><span class="vi">🟣</span><span class="vt"><b>늦은 퇴실 ' + wait.length + '실</b>' + wait.map(y => esc(y[0]) + (y[1].at ? ' (' + esc(y[1].at) + ')' : '')).join(' · ') + ' — 손님이 계세요. 퇴실되면 휴대폰이 울려요' +
     (('Notification' in window) && Notification.permission === 'default' ? '<br><button class="ln" data-latenotif="1">🔔 화면이 꺼져 있어도 알림 받기</button>' : '') + '</span></div>';
   return h;
@@ -527,11 +527,11 @@ function lateCheck() {
   const fresh = lateMine(shownM).filter(y => y[1].out && Date.now() - (y[1].outAt || 0) < 30 * 60000 && lsGet(lateKey(y[0], y[1])) !== '1');
   if (!fresh.length) return;
   fresh.forEach(y => lsSet(lateKey(y[0], y[1]), '1'));
-  const rooms = fresh.map(y => y[0]).join(' · '), msg = rooms + '호 퇴실됐어요 — 바로 정비 시작';
+  const rooms = fresh.map(y => y[0]).join(' · '), msg = rooms + '호 늦은 퇴실 손님이 퇴실하셨어요 — 정비 가능해요';
   if (soundOn()) try { [0, 0.5, 1.0].forEach(t => { tone(880, t, 0.22, 'sine', 0.22); tone(1320, t + 0.18, 0.28, 'sine', 0.18); }); } catch (e) {}
   vibe([400, 150, 400, 150, 700]);
   say('🔔 ' + msg);
-  try { if ('Notification' in window && Notification.permission === 'granted' && navigator.serviceWorker) navigator.serviceWorker.ready.then(r => r.showNotification('🔔 ' + rooms + '호 퇴실', { body: '손님이 나가셨어요 — 바로 정비 시작해 주세요', tag: 'late-' + rooms, renotify: true, vibrate: [400, 150, 400, 150, 700], icon: '../icon-192.png' })).catch(() => {}); } catch (e) {}
+  try { if ('Notification' in window && Notification.permission === 'granted' && navigator.serviceWorker) navigator.serviceWorker.ready.then(r => r.showNotification('🔔 ' + rooms + '호 퇴실', { body: '늦은 퇴실 손님이 퇴실하셨어요 — 정비 가능해요', tag: 'late-' + rooms, renotify: true, vibrate: [400, 150, 400, 150, 700], icon: '../icon-192.png' })).catch(() => {}); } catch (e) {}
   render();
 }
 function ventKey() { return 'rm_vent_' + today; }
