@@ -778,3 +778,13 @@ body.gated #main,body.gated .top{filter:blur(5px);pointer-events:none;user-selec
 .lateb .ln{margin-top:6px;background:#7C3AED;color:#fff;padding:6px 10px;font-size:13px}
 @keyframes ltb{50%{box-shadow:0 0 0 4px #7c3aed55}}
 @media (prefers-reduced-motion:reduce){.room.lateout,.lateb.go{animation:none}}
+
+/* 🟠 우선정비 (11/27): 허브에서 지정 = 주황 테두리 · 위 주황 띠 (늦은 퇴실 보라와 구별) */
+.room.prio2{border-color:#F97316;box-shadow:inset 5px 0 0 #F97316,0 0 0 2px #f9731644}
+.room .pol{display:block;font-weight:800;font-size:13px;color:#C2410C}
+.priob{display:flex;gap:12px;align-items:center;background:color-mix(in srgb,#F97316 9%,var(--surface));border:1.5px solid #F97316;border-radius:14px;padding:12px 14px;margin:0 0 10px}
+.priob .vi{font-size:24px;line-height:1}.priob .vt{flex:1;font-size:15px;line-height:1.5}.priob .vt>b{display:block;color:#C2410C}.priob .pt{color:#C2410C}
+.priob.go{background:#F97316;color:#fff;animation:pob 1.2s ease-in-out infinite}.priob.go .vt>b,.priob.go .pt{color:#fff}
+.priob button{border:0;border-radius:10px;padding:10px 14px;font-weight:800;background:#fff;color:#C2410C}.priob .ln{margin-top:6px;background:#C2410C;color:#fff;padding:6px 10px;font-size:13px}
+@keyframes pob{50%{box-shadow:0 0 0 4px #f9731655}}
+@media (prefers-reduced-motion:reduce){.priob.go{animation:none}}
