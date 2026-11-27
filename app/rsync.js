@@ -12,6 +12,20 @@
 //   첫 1주는 '확인 후 반영'(기본). 시험: '파일 넣어 보기'는 아무것도 바꾸지 않고 결과만 보여 줌
 // 규칙 변경 없음 (changes by '관리자' · info · uploads · meta 는 관리자 쓰기 그대로)
 
+// 📋 앱 정비보고서 날짜 (11/27 소장님: 11/28부터 앱이 원본): jbr/{날}.src === 'app' 이면 엑셀은 쉬고(읽지도 · 메이드 휴대폰에 넘기지도 않음)
+//   앱 정비보고서를 읽어 엑셀 때와 똑같은 길(planSync → 관리자 변경 · 표시)로 메이드 휴대폰에. 안전장치 ③~⑥ 그대로. 폴더 연결 없어도 됨
+//   앱은 한 칸씩 저장돼 반쪽 내용이 없으니 그대로인지 보는 시간은 30초
+export const APP_STABLE_MS = 30000;
+// 테마 객실 (매일 같은 방, 엑셀 상단 '테마 객실' 표와 같음 — hub/assignui.js THEME_ROOMS)
+export const THEME_ROOMS = ['3001', '3002', '3101', '3102', '2909', '2910', '1807', '1808', '1809', '1810', '1811', '1707', '1708'];
+// 앱 정비보고서 한 날 → engine makeRows 가 먹는 모양 (엑셀 buildFromXlsx 의 data 와 같은 칸)
+export function appData(d) {
+  const order = (d.rooms && d.rooms.length ? d.rooms : Object.keys(d.r || {})).map(String);
+  return { rooms: order.filter(k => d.r && d.r[k]).map(k => { const x = d.r[k]; return { room: k, floor: Math.floor(Number(k) / 100), st: x[0] || '', st_fill: x[5] ? 'FFFFFF00' : '', name: x[1] || '', m1: x[2] || '', m2: x[3] || '', done: x[4] ? '1' : '', grp_fill: '' }; }),
+    cards: (d.cards || []).map((c, i) => ({ label: (i + 1) + '] ' + c.n, name: c.n, unit: c.u, actual: '' })),
+    groups: (d.groups || []).map(g => ({ name: g.name || '', time: g.time || '', rooms: String(g.rooms || '').split(',').filter(Boolean) })),
+    themes: THEME_ROOMS.filter(k => d.r && d.r[k]).map(k => ({ room: k, type: '' })) };
+}
 export const STABLE_MS = 120000, POLL_MS = 60000, BIG = 20, HB_MS = 5 * 60000, OTHER_MS = 3 * 60000;
 
 const uniq = a => a.filter((x, i) => a.indexOf(x) === i);
@@ -196,10 +210,15 @@ export function setupSync(ctx) {
     return r;
   }
 
+  let src = 'excel';
   async function poll() {
     if (!running || !ctx.isAdm() || busy) return;
-    if (!dir) { stage = 'off'; return; }
+    if (!dir) { stage = 'off'; return; }   // 연결은 「정비보고서 연결」을 켠 PC(오더테이커) 한 곳만 — 다른 관리자 화면이 같이 넘기면 두 번 들어감
     if (hb === undefined || logDoc === undefined) return;   // 상태 · 기록 첫 읽기 전
+    // 📋 앱 날짜면 엑셀 대신 앱 정비보고서 (엑셀 파일 · 폴더 권한은 안 봄)
+    let jd = null; try { jd = await S.get('jbr/' + day); } catch (e) {}
+    if (jd && jd.src === 'app') { if (src !== 'app') { src = 'app'; hash = ''; rows = null; f0 = null; pend = null; } return pollApp(jd); }
+    if (src !== 'excel') { src = 'excel'; hash = ''; rows = null; f0 = null; pend = null; }
     try { perm = (await dir.queryPermission({ mode: 'read' })) === 'granted' ? 'ok' : 'ask'; } catch (e) { perm = 'ask'; }
     if (perm !== 'ok') { stage = 'perm'; msg = '폴더를 다시 허락해 주세요'; draw(); heartbeat(); return; }
     if (other()) { stage = 'other'; draw(); return; }
@@ -233,6 +252,31 @@ export function setupSync(ctx) {
     } catch (e) {
       stage = 'stop'; msg = String(e && e.message || e).slice(0, 200); draw(); heartbeat();
       if (ctx.report) ctx.report('보고서 연결', msg);
+    }
+  }
+
+  async function pollApp(jd) {
+    if (other()) { stage = 'other'; draw(); return; }
+    checkedAt = Date.now();
+    try {
+      const eng = await ctx.engine(), r = eng._test.makeRows(appData(jd), day);
+      const h = JSON.stringify(r.rows.map(x => x.slice(1, 7))), at = Number(jd.at) || 0;
+      const first = !f0;
+      f0 = { name: '📋 정비보고서 앱', mt: at, size: 0 }; sheetOk = true;
+      if (h !== hash) { hash = h; rows = r.rows; since = first && at && at < Date.now() - APP_STABLE_MS ? at : Date.now(); }
+      if (Date.now() - since < APP_STABLE_MS) { stage = 'wait'; msg = '앱 정비보고서가 바뀐 뒤 30초 그대로인지 보는 중'; draw(); heartbeat(); return; }
+      const d = ctx.data();
+      if (!d || d.noPlan || !d.maids.length) { stage = 'noplan'; msg = '오늘 배정이 메이드 앱에 아직 없어요 (밤 자동 배정 확정이 먼저)'; pend = null; draw(); heartbeat(); return; }
+      if (Date.now() < waitTill) return;
+      const p = planSync(rows, state());
+      lastPlan = p; stage = 'ok'; msg = '📋 앱 정비보고서 연결 중 (엑셀은 쉼)';
+      if (!p.ops.length) { pend = null; draw(); heartbeat(); return; }
+      if (mode() === 'auto' && p.ops.length <= BIG) { await apply(p.ops, '자동'); return; }
+      pend = { ops: p.ops, at: Date.now(), big: p.ops.length > BIG };
+      draw(); heartbeat();
+    } catch (e) {
+      stage = 'stop'; msg = String(e && e.message || e).slice(0, 200); draw(); heartbeat();
+      if (ctx.report) ctx.report('보고서 연결(앱)', msg);
     }
   }
 
