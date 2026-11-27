@@ -51,3 +51,13 @@ async function cacheFirst(e, req) {
   if (hit) return hit;
   return keep(e, req, await fetch(req));
 }
+// 🟣 늦은 퇴실 알림 (11/27): 알림을 누르면 열려 있는 레포트 화면으로 (없으면 새로 열기)
+self.addEventListener('notificationclick', e => {
+  e.notification.close();
+  e.waitUntil((async () => {
+    const all = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+    const c = all.find(x => new URL(x.url).pathname.indexOf(SCOPE) === 0);
+    if (c) return c.focus();
+    return self.clients.openWindow(SCOPE);
+  })());
+});
