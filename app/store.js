@@ -5,7 +5,7 @@ import { initializeApp } from 'https://www.gstatic.com/firebasejs/12.19.0/fireba
 import { getAuth, onAuthStateChanged, signInAnonymously, signInWithEmailAndPassword, signOut as fbSignOut } from 'https://www.gstatic.com/firebasejs/12.19.0/firebase-auth.js';
 import {
   initializeFirestore, persistentLocalCache, persistentMultipleTabManager,
-  doc, collection, onSnapshot, getDoc, getDocs, getDocFromServer, getCountFromServer, setDoc, deleteDoc, query, where,
+  doc, collection, onSnapshot, getDoc, getDocs, getDocFromServer, getCountFromServer, setDoc, deleteDoc, query, where, writeBatch,
   serverTimestamp, Timestamp
 } from 'https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore.js';
 
@@ -88,4 +88,11 @@ export function set(path, data) { return setDoc(ref(path), enc(data)); }
 // 일부 칸만 바꾸기 (2026-11-18 연차: 메이드는 규칙상 정해진 칸만 고칠 수 있음)
 export function merge(path, data) { return setDoc(ref(path), enc(data), { merge: true }); }
 export function add(c, data) { const r = doc(col(c)); return { id: r.id, done: setDoc(r, enc(data)) }; }
+// 한 묶음으로 (2026-11-27 정비보고서: 방 저장 + 변경 기록이 같이 되거나 같이 안 되게). 오프라인이면 묶음째 보관했다가 보냄
+//   ops: [{ op: 'set'|'merge'|'add', path, data }] — add 는 path 가 모음(예: jbr/2026-12-01/log). 돌려줌: 서버가 받으면 끝나는 약속
+export function batch(ops) {
+  const b = writeBatch(db);
+  ops.forEach(o => { if (o.op === 'add') b.set(doc(col(o.path)), enc(o.data)); else b.set(ref(o.path), enc(o.data), o.op === 'merge' ? { merge: true } : {}); });
+  return b.commit();
+}
 export function del(path) { return deleteDoc(ref(path)); }
