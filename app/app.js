@@ -3,14 +3,14 @@
 import * as S from './store.js';
 import { setupMyWork } from './mywork.js';
 import { makeLeaveApi } from './leave_my.js';
-import { setupVoc } from './voc.js?v=2026.11.27-1';   // 11/26: ?v 붙임 (안 붙이면 고친 voc.js 대신 옛 파일을 계속 씀)
+import { setupVoc } from './voc.js?v=2026.11.27-2';   // 11/26: ?v 붙임 (안 붙이면 고친 voc.js 대신 옛 파일을 계속 씀)
 import * as K from './keys.js';   // 🔑 플로어키 서명 (2026-11-19)
 import { setupDreq } from './dreq.js';   // 🔔 더티 요청 (2026-11-21)
-import { setupLost } from './lost.js?v=2026.11.27-1';   // 🧳 습득물 접수 (2026-11-22)
-import { setupSync } from './rsync.js?v=2026.11.27-1';   // 11/27: ?v 붙임 (앱 정비보고서 연결)   // 📄 정비보고서 연결 (2026-11-21): 오더테이커 PC 엑셀 → 바뀐 방만 앱에
-import './autoreload.js?v=2026.11.27-1';   // 🔄 쉬는 순간 자동 새로고침 (2026-11-26) — window.AutoReload
+import { setupLost } from './lost.js?v=2026.11.27-2';   // 🧳 습득물 접수 (2026-11-22)
+import { setupSync } from './rsync.js?v=2026.11.27-2';   // 11/27: ?v 붙임 (앱 정비보고서 연결)   // 📄 정비보고서 연결 (2026-11-21): 오더테이커 PC 엑셀 → 바뀐 방만 앱에
+import './autoreload.js?v=2026.11.27-2';   // 🔄 쉬는 순간 자동 새로고침 (2026-11-26) — window.AutoReload
 
-const APP_VER = '2026.11.27-1';
+const APP_VER = '2026.11.27-2';
 // 관리자 = 보안 규칙 isAdmin 과 같은 목록 (UID 는 공개돼도 되는 값)
 const ADMINS = [
   { uid: 'iw2orXgIgPgTbLUQa0b41XJ9Dvd2', label: '소장', email: 'unieshaeundae+admin@gmail.com' },
@@ -76,6 +76,9 @@ function labelOf(d) { const x = new Date(d + 'T00:00:00+09:00'); return (x.getMo
 function maidOf(n) { return data ? data.maids.filter(m => m.name === n || (m.team && m.team.indexOf(n) >= 0))[0] || null : null; }
 // 이 객실의 배정 주인 (조 화면에서 누가 받은 객실인지) — 기록은 이 이름으로 저장 → 실적 각자 그대로
 let shownM = null;   // 지금 그려진 메이드 화면 (조면 합친 것)
+// 🟣 늦은 퇴실 (11/27): 허브 정비보고서가 meta/late_{날}에 씀 { rooms: { 호실: { at, out, outAt, outHm } } } (규칙 그대로: meta 읽기 = 로그인한 누구나)
+//   내 방이 늦은 퇴실이면 보라 테두리 + '13:00 퇴실 예정 · 손님 계세요', 프런트가 퇴실을 누르면 소리 · 진동 · 알림 + 보라 띠 '퇴실됐어요 — 바로 정비'
+let lateDoc = null;
 function recWho(m, x) { return x.own || m.name; }
 function ownerOf(room) { const m = (isAdm ? shownM : null) || (data && data.maids[0]); if (!m) return me; const x = m.rooms.filter(y => y.room === room)[0] || (m.removed || []).filter(y => y.room === room)[0]; return (x && x.own) || m.name || me; }
 // 조 휴대폰에서 객실 추가는 오늘 배정이 있는 쪽으로 (배정 없는 이름은 기록이 규칙에 막힘)
@@ -127,6 +130,7 @@ function start() {
   }, e => console.warn('날짜 읽기 실패', e)));
   subs.push(S.listenQuery('notices', [], docs => { notices = docs.map(x => x.data); update(); }, e => console.warn('공지 읽기 실패', e)));
   subs.push(S.listenDoc('meta/dirty', d => { dirtyDoc = d; update(); }, () => {}));
+  subs.push(S.listenDoc('meta/late_' + today, d => { lateDoc = d; update(); }, () => {}));   // 🟣 늦은 퇴실
   subs.push(S.listenDoc('meta/keys', d => { keyCfg = d; update(); }, () => {}));
   if (!isAdm) subs.push(S.listenDoc('meta/meals', d => { meals = d; update(); }, () => {}));   // 🍚 오늘 점심 (2026-11-21, 허브에서 올린 주간 식단)
   subs.push(S.listenDoc('meta/teams', d => {
@@ -340,7 +344,7 @@ function loadPastAcksAdmin() {
 }
 
 let rT = 0;
-function update() { if (rT) return; rT = requestAnimationFrame(() => { rT = 0; compute(); render(); closeAckedPopup(); maybePopup(); }); }
+function update() { if (rT) return; rT = requestAnimationFrame(() => { rT = 0; compute(); render(); closeAckedPopup(); maybePopup(); lateCheck(); }); }
 // 늦게 들어온 확인 기록으로 이미 확인한 공지가 떠 있으면 닫음
 function closeAckedPopup() { if (dlg && dlg.kind === 'notice' && dlg.must && me && !isAdm && acked(dlg.n, me)) { seenPopup[dlg.n.id] = 1; dlg = null; drawDlg(); } }
 function compute() {
@@ -492,16 +496,43 @@ function roomCard(m, x, isTeam) {
   const r = recOf(recWho(m, x), x.room), cls = r ? ' done' : (isDirty(x.room) ? ' dirty' : '');
   const hot = !r && x.due && x.due <= addMin(nowHM(), 60) ? ' duehot' : '';
   const pri = !r && (x.due || x.after) ? ' pri' : '', nt = noteRest(x), mm = memoRest(x);
+  const lt = !r ? lateOf(x.room) : null, ltCls = lt ? (lt.out ? (Date.now() - (lt.outAt || 0) < 90 * 60000 ? ' lateout' : '') : ' late') : '';
   const key = RK(recWho(m, x), x.room), pop = r && justDone[key] === 1;
   if (pop) justDone[key] = 2;
   const seal = r ? '<span class="seal"><i>CHECK</i><b>정비완료</b>' + (isAdm ? '<span>' + hm(r.at) + '</span>' : '<span class="ck">✔</span>') + '</span>' : '';
-  return '<button class="room' + cls + pri + hot + (pop ? ' pop' : '') + '" data-room="' + esc(x.room) + '"><span class="no">' + esc(x.room) + (isTeam && x.own ? '<span class="own">' + esc(shortName(x.own)) + '</span>' : '') + '</span><span class="mid">' +
+  return '<button class="room' + cls + pri + hot + ltCls + (pop ? ' pop' : '') + '" data-room="' + esc(x.room) + '"><span class="no">' + esc(x.room) + (isTeam && x.own ? '<span class="own">' + esc(shortName(x.own)) + '</span>' : '') + '</span><span class="mid">' +
+    (ltCls === ' late' ? '<span class="ltl">🟣 ' + (lt.at ? esc(lt.at) + ' 퇴실 예정' : '늦은 퇴실') + ' · 손님 계세요</span>' : ltCls ? '<span class="ltl go">🔔 ' + esc(lt.outHm || '') + ' 퇴실됐어요 · 바로 정비</span>' : '') +
     (!r && isDirty(x.room) ? '<span class="dt">' + IC.bed + '더티 완료</span>' : '') + timeLine(x, !!r) + (tagsHtml(x) ? '<span class="tags">' + tagsHtml(x) + '</span>' : '') +
     (nt ? '<span class="nt">' + esc(nt) + '</span>' : '') + (mm ? '<span class="mm">메모 · ' + esc(mm) + '</span>' : '') +
     (x.from ? '<span class="sw">↔ ' + esc(x.from) + ' 님과 교환한 객실</span>' : '') +
     (r && r.memo ? '<span class="memo-mk">✎ 내 메모 있음</span>' : '') +
     (pend[key] && (offline() || pendLong()) ? '<span class="pend">⏳ 휴대폰에 보관됨 · 보내는 중</span>' : '') +
     '</span><span class="st">' + (r ? '' : leftChip(x)) + '</span>' + seal + '</button>';
+}
+// ---------- 🟣 늦은 퇴실 (11/27)
+function lateOf(room) { const r = lateDoc && lateDoc.date === today && lateDoc.rooms; return r && r[room] ? r[room] : null; }
+const lateKey = (room, l) => 'rm_lo_' + today + '_' + room + '_' + (l.outAt || 0);
+function lateMine(m) { return (m ? m.rooms : []).filter(x => !recOf(recWho(m, x), x.room)).map(x => [x.room, lateOf(x.room)]).filter(y => y[1]); }
+function lateBand(m) {
+  const L = lateMine(m), wait = L.filter(y => !y[1].out), go = L.filter(y => y[1].out && lsGet(lateKey(y[0], y[1]) + '_ok') !== '1' && Date.now() - (y[1].outAt || 0) < 90 * 60000);
+  let h = '';
+  if (go.length) h += '<div class="lateb go"><span class="vi">🔔</span><span class="vt"><b>' + go.map(y => esc(y[0])).join(' · ') + '호 퇴실됐어요</b>손님이 나가셨어요 — 바로 정비 시작해 주세요</span><button data-lateok="1">확인</button></div>';
+  if (wait.length) h += '<div class="lateb"><span class="vi">🟣</span><span class="vt"><b>늦은 퇴실 ' + wait.length + '실</b>' + wait.map(y => esc(y[0]) + (y[1].at ? ' (' + esc(y[1].at) + ')' : '')).join(' · ') + ' — 손님이 계세요. 퇴실되면 휴대폰이 울려요' +
+    (('Notification' in window) && Notification.permission === 'default' ? '<br><button class="ln" data-latenotif="1">🔔 화면이 꺼져 있어도 알림 받기</button>' : '') + '</span></div>';
+  return h;
+}
+// 퇴실 순간: 소리 · 진동 · (허락했으면) 휴대폰 알림. 한 방 한 번만 (이 휴대폰에 표시)
+function lateCheck() {
+  if (isAdm || !shownM || !lateDoc) return;
+  const fresh = lateMine(shownM).filter(y => y[1].out && Date.now() - (y[1].outAt || 0) < 30 * 60000 && lsGet(lateKey(y[0], y[1])) !== '1');
+  if (!fresh.length) return;
+  fresh.forEach(y => lsSet(lateKey(y[0], y[1]), '1'));
+  const rooms = fresh.map(y => y[0]).join(' · '), msg = rooms + '호 퇴실됐어요 — 바로 정비 시작';
+  if (soundOn()) try { [0, 0.5, 1.0].forEach(t => { tone(880, t, 0.22, 'sine', 0.22); tone(1320, t + 0.18, 0.28, 'sine', 0.18); }); } catch (e) {}
+  vibe([400, 150, 400, 150, 700]);
+  say('🔔 ' + msg);
+  try { if ('Notification' in window && Notification.permission === 'granted' && navigator.serviceWorker) navigator.serviceWorker.ready.then(r => r.showNotification('🔔 ' + rooms + '호 퇴실', { body: '손님이 나가셨어요 — 바로 정비 시작해 주세요', tag: 'late-' + rooms, renotify: true, vibrate: [400, 150, 400, 150, 700], icon: '../icon-192.png' })).catch(() => {}); } catch (e) {}
+  render();
 }
 function ventKey() { return 'rm_vent_' + today; }
 const ventHidden = {};
@@ -535,6 +566,7 @@ function renderMaid(m, asAdmin) {
   const dirtyLeft = m.rooms.filter(x => isDirty(x.room) && !recOf(recWho(m, x), x.room));
   let html = asAdmin ? '' : bands() + keyPastHtml() + instHtml() + ventHtml() + swapBanner(m) + keyBand(m, allDone);
   if (!asAdmin) html += DR.band(m);
+  if (!asAdmin) html += lateBand(m);
   html += asAdmin ? '<div class="amode"><button class="ghost back" data-back="1">← 전체 현황</button><span>' + (m.team && m.team.length > 1 ? esc(m.team.join('·')) + ' 조 화면 (조 휴대폰과 같음 · 객실을 누르면 배정받은 분 이름으로 대신 처리)' : esc(m.name) + ' 님 화면' + (m.mateOff ? ' · 2인 1조 (짝 ' + esc(m.mateOff) + ' 님 오늘 배정 없음)' : '') + ' (객실을 누르면 대신 처리)') + '</span></div>' : '';
   const tile = (cls, n, lbl, jump) => (jump ? '<button class="stat ' + cls + '" data-jump="' + esc(jump) + '">' : '<div class="stat ' + cls + '">') + '<b>' + n + '</b><span>' + lbl + '</span>' + (jump ? '</button>' : '</div>');
   const isTeam = !!(m.team && m.team.length > 1), teamName = isTeam ? m.team.join(' · ') : m.name;
@@ -1190,6 +1222,8 @@ document.addEventListener('click', e => {
   if (at('[data-inst-x]')) { instClosed = true; lsSet('rm_inst_hide', String(Date.now() + 7 * 864e5)); render(); return; }
   if (at('[data-inst]')) { dlg = { kind: 'instguide', os: OS === 'ios' ? 'ios' : 'android' }; drawDlg(); return; }
   if (at('[data-vent]')) { ventHidden[ventKey()] = 1; lsSet(ventKey(), '1'); render(); return; }
+  if (at('[data-lateok]')) { lateMine(shownM).filter(y => y[1].out).forEach(y => lsSet(lateKey(y[0], y[1]) + '_ok', '1')); render(); return; }
+  if (at('[data-latenotif]')) { try { Notification.requestPermission().then(() => render()); } catch (e) {} return; }
   if (at('[data-dreq]') && !isAdm && me) { const m = data.maids[0]; if (m) DR.check(m); return; }
   if (at('[data-addroom]')) { if (isAdm && viewMaid) dlg = { kind: 'addroom', maid: viewMaid, proxy: true, no: '' }; else if (!isAdm && me) dlg = { kind: 'addroom', maid: addTarget(), no: '' }; drawDlg(); const f = $('#roomno'); if (f) f.focus(); return; }
   if (at('[data-nlist]')) { dlg = { kind: 'nlist' }; drawDlg(); return; }
