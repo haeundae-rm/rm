@@ -159,6 +159,7 @@ const SETUP = /과도|케틀|캐틀|칼|가위|인덕션/u;
 const SETUP_WORDS = /과도|케틀|캐틀|칼|가위|인덕션\s*(?:on|off)?|(?<!린넨)회수|해제|복구/giu;
 const ITEMS = [['과도', /과도/u], ['칼', /칼/u], ['가위', /가위/u], ['케틀', /케틀|캐틀/u]];
 const TYPE_CODE = new RegExp('(?<!' + W + ')(?!VIP(?!' + W + '))[A-Z]{3}(?!' + W + ')', 'gu');
+const DONE_WORDS = /악취\s*(해제|탈취\s*완료)|시설\s*작업\s*완료/gu;   // 11/28 정비보고서 「해제 · 탈취완료 · 완료」 단추
 const CAUTION = /시설|악취|막힘|고장|분실|지갑|찾기|파손|누수|냄새/u;
 const D = '\\p{Nd}';
 const TIME_UNTIL = new RegExp('(?:~\\s*)?(' + D + '{1,2})\\s*시\\s*(반|' + D + '{1,2}\\s*분)?\\s*(?:까지)?', 'u');
@@ -212,7 +213,7 @@ function makeRows(d, day) {
     if (!due && (tags.includes('VIP') || THEME.has(room))) due = '14:00';
     if (due) tags.push(due === '14:00' ? '14시까지' : '마감');
     if (SETUP.test(memo)) tags.push(setupKind(memo));
-    if (CAUTION.test(memo)) tags.push('주의');
+    if (CAUTION.test(memo.replace(DONE_WORDS, ''))) tags.push('주의');   // 11/28: 악취해제 · 악취탈취완료 · 시설작업완료 = 끝난 일 → 주의 아님
     tags = [...new Set(tags)].sort((a, b) => key0(a) - key0(b));
     let shown = memo.replace(TYPE_CODE, '');
     if (tags.includes('학단 회수') || tags.includes('학단 복구')) shown = shown.replace(SETUP_WORDS, ' ');
