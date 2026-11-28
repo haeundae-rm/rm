@@ -1,6 +1,6 @@
 // 📋 앱 정비보고서 → 메이드 휴대폰 연결 시험 (2026-11-27) — node test/rsync_app_test.mjs  (가명)
 //   appData(jbr 한 날) → engine makeRows → planSync: 엑셀 때와 같은 결과 · 바뀐 방만 · 손으로 바꾼 방 · 완료 방 보호
-import { appData, planSync, THEME_ROOMS } from '../app/rsync.js';
+import { appData, planSync, THEME_ROOMS, srvLiveOf } from '../app/rsync.js';
 import { _test } from '../app/engine.js';
 let pass = 0, fail = 0; const ok = (c, m) => { console.log((c ? '  ✅ ' : '  ❌ ') + m); c ? pass++ : fail++; };
 const DAY = '2026-11-28';
@@ -32,4 +32,8 @@ ok(!k2.includes('제외 가람 402') && !k2.some(x => x.endsWith('601')) && p.di
 const d3 = JSON.parse(JSON.stringify(doc)); d3.r['401'][0] = '2';
 p = planSync(_test.makeRows(appData(d3), DAY).rows, st());
 ok(p.ops.length === 1 && p.ops[0].k === '표시' && p.ops[0].room === '401' && p.ops[0].to.tags.includes('재실'), '재실 표시만 넘김');
+// ☁ 서버 반영 (11/28): 서버가 live 로 5분 안에 소식 → PC 연결 창은 쉼
+const T = Date.parse('2026-11-28T10:00:00+09:00');
+ok(srvLiveOf({ runMode: 'live', state: 'ok', at: T - 60e3 }, T) && !srvLiveOf({ runMode: 'shadow', state: 'ok', at: T - 60e3 }, T) && !srvLiveOf({ runMode: 'live', state: 'ok', at: T - 6 * 60e3 }, T) && !srvLiveOf({ runMode: 'live', state: 'off', at: T }, T) && srvLiveOf({ runMode: 'live', state: 'hold', at: { toMillis: () => T } }, T) && !srvLiveOf(null, T),
+  '서버 live · 5분 안 → PC 쉼 / 그림자 · 5분 넘음 · off → PC 가 반영');
 console.log('\n' + pass + ' 통과 / ' + fail + ' 실패'); process.exit(fail ? 1 : 0);
