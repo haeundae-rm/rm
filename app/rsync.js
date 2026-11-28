@@ -26,6 +26,8 @@ export function appData(d) {
     groups: (d.groups || []).map(g => ({ name: g.name || '', time: g.time || '', rooms: String(g.rooms || '').split(',').filter(Boolean) })),
     themes: THEME_ROOMS.filter(k => d.r && d.r[k]).map(k => ({ room: k, type: '' })) };
 }
+const msOf = v => (v == null ? 0 : typeof v === 'number' ? v : typeof v.toMillis === 'function' ? v.toMillis() : v.seconds ? v.seconds * 1000 : Number(new Date(v)) || 0);
+export const srvLiveOf = (v, now) => !!(v && v.runMode === 'live' && v.state !== 'off' && now - msOf(v.at) < 5 * 60000);
 export const STABLE_MS = 120000, POLL_MS = 60000, BIG = 20, HB_MS = 5 * 60000, OTHER_MS = 3 * 60000;
 
 const uniq = a => a.filter((x, i) => a.indexOf(x) === i);
@@ -151,7 +153,9 @@ export function setupSync(ctx) {
   let dir = null, perm = 'none', hb = undefined, logDoc = undefined, take = false;
   let f0 = null, hash = '', since = 0, rows = null, sheetOk = true, msg = '', checkedAt = 0, stage = 'off';
   let pend = null, lastPlan = null, waitTill = 0, lastHb = { at: 0, sig: '' }, busy = false, test = null;
-  let snapSig = '', snapErr = false;
+  let snapSig = '', snapErr = false, srv = null;
+  // ☁ 서버 반영 (11/28 hub/cloud jbrSync): 서버가 live 로 돌고 5분 안에 소식이 있으면 이 창은 앱 날짜 반영을 쉼 (두 번 들어가지 않게). 서버가 멈추면 다시 맡음
+  const srvLive = () => srvLiveOf(srv, Date.now());
 
   // 📋 정비보고서 사본 (11/26): 엑셀을 읽을 때마다 그날 전체(방 · 카드 · 단체 · 명단)를 jbr/{날} 에 → 허브 '정비보고서' 화면 · 결산
   //   12/1부터 앱이 원본이 되면(src 'app') 엑셀 사본으로 덮지 않음. 내용이 같으면 안 씀
@@ -180,6 +184,7 @@ export function setupSync(ctx) {
   async function start(d) {
     stop(); day = d; running = true; logDoc = undefined; hb = undefined;
     subs.push(S.listenDoc('meta/rsync', x => { hb = x || null; draw(); }, () => { hb = null; }));
+    subs.push(S.listenDoc('meta/rsync_srv', x => { srv = x || null; draw(); }, () => { srv = null; }));
     subs.push(S.listenDoc(logPath(), x => { logDoc = x || null; draw(); }, () => { logDoc = null; }));
     if (can) {
       dir = await kvGet('dir');
@@ -256,6 +261,7 @@ export function setupSync(ctx) {
   }
 
   async function pollApp(jd) {
+    if (srvLive()) { stage = 'srv'; msg = ''; pend = null; draw(); heartbeat(); return; }
     if (other()) { stage = 'other'; draw(); return; }
     checkedAt = Date.now();
     try {
@@ -393,7 +399,7 @@ export function setupSync(ctx) {
     const S0 = {
       off: ['', '아직 연결 안 됨'], perm: ['bad', '🔓 폴더를 다시 허락해 주세요 (크롬을 다시 켜면 한 번 더 눌러야 해요)'],
       wait: ['wait', '⏳ ' + (msg || '읽는 중…')], noplan: ['wait', '⏳ ' + msg], other: ['wait', '다른 창(또는 다른 PC)에서 이미 연결 중이에요 · ' + esc(hb && hb.who || '')],
-      stop: ['bad', '⛔ 멈춤 · ' + msg], ok: ['ok', '✅ 연결됨 · 엑셀과 앱이 ' + (pend ? '다른 곳 ' + opLines(pend.ops).length + '건 (아래에서 확인)' : '맞아요')]
+      stop: ['bad', '⛔ 멈춤 · ' + msg], srv: ['ok', '☁ 서버가 메이드 휴대폰에 반영 중 — 이 창은 쉬어요 (서버가 5분 넘게 멈추면 이 창이 다시 맡아요)'], ok: ['ok', '✅ 연결됨 · 엑셀과 앱이 ' + (pend ? '다른 곳 ' + opLines(pend.ops).length + '건 (아래에서 확인)' : '맞아요')]
     }[stage] || ['', ''];
     return '<div class="relay' + (S0[0] === 'bad' ? ' bad' : '') + '">' + esc(S0[1]) + '</div>' +
       (f0 ? '<p class="rec" style="margin:6px 0 0">📄 ' + esc(f0.name) + ' · 마지막 저장 ' + hm(f0.mt) + (age >= 1 ? ' (' + age + '분 전)' : '') + (checkedAt ? ' · 확인 ' + hm(checkedAt) : '') + '</p>' : '');
